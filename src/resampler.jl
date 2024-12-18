@@ -3,81 +3,133 @@
 
 using Base.Threads
 using Random
+using TriangularIndices
+using StatsBase
 include("util.jl")
 include("groups.jl")
+include("kernel.jl")
 
 
-mutable struct Resampler
-    B::Int64             # Number of samples to take
-    f_sampler::Function  # Sampling method
-    n_prop::Float64      # Size of sample relative to original sample (1 being same size)
-    function Resampler(;B=200, f_sampler=subsampler, n_prop=1)
-        return new(B, f_sampler, n_prop)
+# Shared functions
+# ----------------
+
+abstract type AbstractResampler end
+
+# Overload this as necessary
+function initialize(RS::AbstractResampler, data::Data) end
+
+# Estimates the p-value given the test statistic
+function estimate_pvalue(test::AbstractTest, test_stat::Float64, same_ref::Bool)
+    RS = get_resampler(test)
+    B = RS.B
+    bvals = Vector{Bool}(undef, B)
+    @inbounds @threads for b in eachindex(bvals)
+        bdata = resample(RS)
+        bvals[b] = (same_ref ? null_test_statistic(test,bdata) : test_statistic(test,bdata)) > test_stat
+    end
+    return (1+sum(bvals)) / (1+B)
+end
+
+
+# Permutation resampling
+# ----------------------
+
+mutable struct Permuter <: AbstractResampler
+    B::UInt16     # Number of resamples
+    paired::Bool  # Paired samples?
+    # Internal use
+    data::Data  # Stored data
+    function Permuter(B::Integer, paired::Bool=false, data::Data=Data(0))
+        return new(B, paired, data)
     end
 end
 
+# Initializes the permuter
+function initialize(RS::Permuter, data::Data)
+    RS.data = data
+end
 
-# Computes set of resampled test statistics for one/two-sample tests
-function resample(test::Any, x::AbstractMatrix{Float64})
-    n = size(x, 2)
-    RS = test.RS
-    bvals = zeros(RS.B)
-    @threads for b in 1:RS.B
-        bx = RS.f_sampler(test, x)
-        bvals[b] = test_statistic(test, bx)
+# Permutes the sample
+function resample(RS::Permuter)
+    n = RS.data.n
+    RS_data = Data(n)
+    x = RS.data.x
+    if RS.paired
+        n2 = Int(n / 2)
+        # Swap pairs randomly
+        swaps = rand(Bernoulli(0.5), n2)
+        RS_data.x = similar(x)
+        @views @inbounds @threads for i in 1:n2
+            RS_data.x[:,i] = swaps[i] ? x[:,n2+i] : x[:,i]
+            RS_data.x[:,n2+i] = swaps[i] ? x[:,i] : x[:,n2+i]
+        end
+    else
+        RS_data.x = x[:, randperm(n)]
     end
-    return bvals
+    return RS_data
 end
-function resample(test::Any, x1::AbstractMatrix{Float64}, x2::AbstractMatrix{Float64})
-    n1 = size(x1, 2)
-    n2 = size(x2, 2)
-    x = hcat(x1, x2)
-    n = n1 + n2
-    RS = test.RS
-    bvals = zeros(RS.B)
-    @threads for b in 1:RS.B
-        bx1, bx2 = RS.f_sampler(test, x, n1, n2)
-        bvals[b] = test_statistic(test, bx1, bx2)
+
+
+# Haar transformation resampling (for invariance)
+# -----------------------------------------------
+
+mutable struct HaarTransformer <: AbstractResampler
+    B::UInt16  # Number of resamples
+    G::Group   # Group
+    # Internal use
+    data::Data  # Stored data
+    function HaarTransformer(B::Integer, G::Group, data::Data=Data(0))
+        return new(B, G, data)
     end
-    return bvals
+end
+
+# Initializes the Haar transformer
+function initialize(RS::HaarTransformer, data::Data)
+    RS.data = data
+end
+
+# Applies a random transformation to each point in the sample
+function resample(RS::HaarTransformer)
+    return Data(RS.data.n, x=transform_all(RS.G,RS.data.x))
 end
 
 
-# Computes the p-value given the observed and resampled test statistics
-function resampler_pvalue(test::Any, test_stat::Float64, bvals::Vector{Float64})
-    return (1 + sum(bvals.>test_stat)) / (1 + test.RS.B)
+# Conditional randomization resampling (for equivariance)
+# -------------------------------------------------------
+
+mutable struct EquivariantResampler <: AbstractResampler
+    B::UInt16  # Number of resamples
+    G::Group   # Group
+    # Internal parameters
+    data::Data  # Source data
+    function EquivariantResampler(B::Integer, G::Group; data=Data(0))
+        return new(B, G, data)
+    end
 end
 
-
-# Common sampling methods
-# -----------------------
-
-# Subsamples from data
-function subsampler(test::Any, x::AbstractMatrix{Float64})
-    n = size(x, 2)
-    # Don't use views when subsampling randomly
-    return x[:, sample(1:n,ceil(Int64,n*test.RS.n_prop),replace=true)]
-end
-function subsampler(test::Any, x::AbstractMatrix{Float64}, n1::Int64, n2::Int64)
-    n = n1 + n2
-    # Don't use views when subsampling randomly
-    return x[:,sample(1:n,ceil(Int64,n1*test.RS.n_prop),replace=true)], x[:,sample(1:n,ceil(Int64,n2*test.RS.n_prop),replace=true)]
+# Initializes the conditional randomization procedure
+function initialize(RS::EquivariantResampler, data::Data)
+    RS.data = data
+    
+    # Precompute conditional probabilities
+    initialize(data, RS.G, :M)
+    initialize(data, RS.G, :probs)
+    
+    # Precompute the G and Y distributions
+    initialize(data, RS.G, :g)
+    initialize(data, RS.G, :τy)
 end
 
-
-# Transforms the data
-function transform_sampler(test::Any, x::AbstractMatrix{Float64})
-    return transform_all(test.GS, x)
-end
-
-
-# Transforms the data before subsampling
-function transform_subsampler(test::Any, x::AbstractMatrix{Float64})
-    return subsampler(test, transform_sampler(test,x))
-end
-
-
-# Subsamples the data before transforming
-function subsample_transformer(test::Any, x::AbstractMatrix{Float64})
-    return transform_sampler(test, subsampler(test,x))
+# Resamples via conditional randomization
+function resample(RS::EquivariantResampler)
+    data = RS.data
+    y = similar(data.y)
+    inds = 1:data.n
+    @views @inbounds @threads for i in inds
+        # Sample with probability proportional to orbit representative kernel distance
+        j = sample(inds, data.probs[i])
+        y[:,i] = RS.G.f_transform_Y(data.τy[:,i] , data.g[j])
+    end
+    RS_data = Data(data.n, y=y)
+    return RS_data
 end

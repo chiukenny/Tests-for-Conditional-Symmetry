@@ -42,34 +42,69 @@ include(dir_src * "groups.jl")            # Groups and related functions
 # -------------------------------------------
 
 default(fontfamily="Computer Modern", framestyle=:box, label=nothing, grid=false, legend=:none,
-        linewidth=4, titlefontsize=9, guidefontsize=9, tickfontsize=7, legendfontsize=8,
+        linewidth=3, titlefontsize=8, guidefontsize=8, tickfontsize=6, legendfontsize=6,
         margin=0mm, dpi=300)
 
 # Set default palette to be CVD-friendly
+iGV_BS_FS = "indep_" * GV_BS_FS
+iGV_BS_SK = "indep_" * GV_BS_SK
+iGV_RN_FS = "indep_" * GV_RN_FS
+iGV_RN_SK = "indep_" * GV_RN_SK
+rGV_BS_FS = "reuse_" * GV_BS_FS
+rGV_BS_SK = "reuse_" * GV_BS_SK
+rGV_RN_FS = "reuse_" * GV_RN_FS
+rGV_RN_SK = "reuse_" * GV_RN_SK
+iGV_FUSE = "indep_" * GV_FUSE
+iGV_SK = "indep_" * GV_SK
+rGV_FUSE = "reuse_" * GV_FUSE
+rGV_SK = "reuse_" * GV_SK
 gr(palette = :tol_bright)
-colsDict = Dict(GV_2S=>1, GV_MMD=>2, GV_NMMD=>3, GV_CW=>4, GV_KCI=>5, GV_CP=>6)
+colsDict = Dict(iGV_BS_FS=>1, iGV_BS_SK=>"darkorange2", iGV_RN_FS=>5,  iGV_RN_SK=>"goldenrod1",
+                rGV_BS_FS=>1, rGV_BS_SK=>"darkorange2", rGV_RN_FS=>5,  rGV_RN_SK=>"goldenrod1",
+                GV_BS_FS=>1, GV_BS_SK=>"darkorange2", GV_RN_FS=>5,  GV_RN_SK=>"goldenrod1", GV_FUSE=>5, GV_SK=>"goldenrod1")
 
-# p-value x-label hack
-xlab_pv = scatter([0.5], [0], xlims=[0,1], yticks=[], alpha=0, framestyle=:none,
-                  series_annotation=text(L"p\mathrm{-value}",:bottom,pointsize=9))
+# Axis label hack
+function shared_xlab(label; top_margin=2mm, bottom_margin=0mm)
+    return scatter([0], [0], xlims=[0,1], xmirror=true, xticks=[], yticks=[], alpha=0, xlab=label, border=:grid,
+                   top_margin=top_margin, bottom_margin=bottom_margin)
+end
+function shared_ylab(label; right_margin=3mm)
+    return scatter([0], [0], ylims=[0,1], ymirror=true, xticks=[], yticks=[], alpha=0, ylab=label, border=:grid, right_margin=right_margin)
+end
 
 # Blank plot
 ep = plot(framestyle=:none, ticks=[])
+
+# Tests
+all_tests = [iGV_BS_FS, iGV_BS_SK, rGV_BS_FS, rGV_BS_SK, iGV_RN_FS, iGV_RN_SK,rGV_RN_FS, rGV_RN_SK]
+all_tests_i = [iGV_BS_FS, iGV_BS_SK, iGV_RN_FS, iGV_RN_SK]
+all_tests_r = [rGV_BS_FS, rGV_BS_SK, rGV_RN_FS, rGV_RN_SK]
+test_labs = [GV_BS_FS, GV_BS_SK, GV_RN_FS, GV_RN_SK]
 
 
 # Plotting functions
 # ------------------
 
-# Plots mean rejection rates and standard deviations
-function plot_rej(df::DataFrame, x, regexp="";
-                  xlab="", ylab="", ylims=:auto, pl_xticks=false, pl_yticks=false)
-    p = plot(xlab=xlab, ylab=ylab, xlims=(minimum(x),maximum(x)), ylims=ylims, grid=true)
-    for i in 1:nrow(df)
-        rej = collect(df[i,Regex(regexp*"_rej\$")])
-        sd = collect(df[i,Regex(regexp*"_rej_sd\$")])
-        test = df[i, "Test"]
-        plot!(x, rej, linecolor=colsDict[test], linealpha=0.7, label=test)
-        plot!(x, max.(0,rej.-sd), fillrange=min.(1,rej.+sd), label=:none, fillalpha=0.2, linealpha=0, fillcolor=colsDict[test])
+# Computes rejection rate and standard deviations
+function compute_rej_rate(df::DataFrame, tests::AbstractVector{String}, means::AbstractVector{Float64}, sds::AbstractVector{Float64})
+    n = size(df, 1)
+    @views @inbounds for i in 1:length(tests)
+        test = tests[i]
+        means[i] = mean.(eachcol(df[:,Regex(test*"_p\$")] .< α))[1]
+        sds[i] = sqrt.(means[i] .* (1 .- means[i]) / n)
+    end
+end
+
+# Plots rejection rate and standard deviations
+function plot_rej_rate(means::AbstractMatrix{Float64}, sds::AbstractMatrix{Float64},
+                       tests::AbstractVector{String}, x::AbstractVector{<:Number};
+                       title="", xlab="", ylab="", ylims=(0,1), pl_xticks=false, pl_yticks=false, all_tests=all_tests, xrotation=0)
+    p = plot(xlab=xlab, ylab=ylab, xlims=(minimum(x),maximum(x)), ylims=ylims, grid=true, title=title, xrotation=xrotation)
+    @views @inbounds for test in tests
+        i = findall(x->x==test, all_tests)[1]
+        plot!(x, means[i,:], linecolor=colsDict[test], linealpha=0.7, label=test)
+        plot!(x, max.(0,means[i,:].-sds[i,:]), fillrange=min.(1,means[i,:].+sds[i,:]),
+              label=:none, fillalpha=0.2, linealpha=0, fillcolor=colsDict[test])
     end
     if !pl_xticks
         plot!(xticks = (xticks(p)[1][1],""))
@@ -79,15 +114,15 @@ function plot_rej(df::DataFrame, x, regexp="";
     end
     return p
 end
-
-# Plots mean computation time
-function plot_time(df::DataFrame, x, regexp="";
-                   xlab="", ylab="", ylims=:auto, pl_xticks=false, pl_yticks=false)
-    p = plot(xlab=xlab, ylab=ylab, xlims=(minimum(x),maximum(x)), ylims=ylims, grid=true)
-    for i in 1:nrow(df)
-        time = collect(df[i,Regex(regexp*"_avgtime\$")])
-        test = df[i, "Test"]
-        plot!(x, time, linecolor=colsDict[test], linealpha=0.7, label=df[i,"Test"])
+function plot_rej_rate_all(means::AbstractMatrix{Float64}, sds::AbstractMatrix{Float64},
+                       tests::AbstractVector{String}, x::AbstractVector{<:Number};
+                       title="", xlab="", ylab="", ylims=(0,1), pl_xticks=false, pl_yticks=false, all_tests=all_tests)
+    p = plot(xlab=xlab, ylab=ylab, xlims=(minimum(x),maximum(x)), ylims=ylims, grid=true, title=title)
+    @views @inbounds for test in tests
+        i = findall(x->x==test, all_tests)[1]
+        alpha = startswith(test,"reuse_") ? 0.4 : 0.7
+        style = startswith(test,"reuse_") ? :dot : :solid
+        plot!(x, means[i,:], linecolor=colsDict[test], linealpha=alpha, linestyle=style, label=test)
     end
     if !pl_xticks
         plot!(xticks = (xticks(p)[1][1],""))
@@ -99,10 +134,11 @@ function plot_time(df::DataFrame, x, regexp="";
 end
 
 # Plots p-value distribution
-function hist(test, x, ylab="";
-              bins=10, bw=0.1, p_col=:white, p_y=0, x_ticks=[0,0.5,1], title="", last_row=false, KS=true)
-    xt = last_row ? [x_ticks[i]==0 ? "0" : rstrip(string(x_ticks[i]),['0','.']) for i in 1:length(x_ticks)] : []
+function hist(df::DataFrame, test::String, ylab="";
+              bins=10, bw=0.1, p_col=:white, p_y=0, p_x=0.77, x_ticks=[0,0.5,1], title="", last_row=false, KS=false)
+    x = df[:, Regex(test*"_p\$")][!,1]
     xx = vcat(x, collect(minimum(x_ticks):maximum(x_ticks))./bins)  # Visual hack to force all bins to show
+    xt = last_row ? [x_ticks[i]==0 ? "0" : rstrip(string(x_ticks[i]),['0','.']) for i in 1:length(x_ticks)] : []
     p = histogram(xx, bins=bins, fillcolor=colsDict[test], linecolor=colsDict[test], lw=1, bar_width=bw,
                   xticks=(x_ticks,xt), xlims=[minimum(x_ticks),maximum(x_ticks)], ylab=ylab, yticks=[], title=title)
     yl = ylims(p)
@@ -112,462 +148,1028 @@ function hist(test, x, ylab="";
         P_U = Uniform(0, 1)
         n = length(x)
         pv = pvalue(ExactOneSampleKSTest(jitter(x), P_U))
-        scatter!([0.77], [p_y], alpha=0,
+        scatter!([p_x], [p_y], alpha=0,
                  series_annotation=text(L"$\mathbf{%$(rpad(round(pv,digits=3),5,'0'))}$",:bottom,pointsize=9,color=p_col))
     end
     return p
 end
 
 
-# Invariant distribution example plots
-# ------------------------------------
+# Miscellaneous
+# -------------
 
-# Set seed for reproducibility
+function circle(h, k, r)
+    θ = LinRange(0, 2*π, 200)
+    h .+ r*sin.(θ), k .+ r*cos.(θ)
+end
+
+n_labs = 4
+leg = plot(zeros(1,n_labs), showaxis=false, legend=true, label=reshape(test_labs,1,n_labs), legendcolumns=Int(n_labs/2),
+           foreground_color_legend=nothing, color=reshape([colsDict[test] for test in all_tests_r],1,n_labs))
+
+## Plots
+
+# Symmetries
+# ----------
+
 Random.seed!(1)
 
-# Make contour plots
-N = 100
-tick0 = [0]
+G = Group(f_sample=rand_θ, f_transform=rotate_2D)
+n = 250
+Pz = Normal(1, 0.2)
 
-# Standard Gaussian
-P_sg = MvNormal([0,0], 1)
-x_sg = range(-2.75, 2.75, length=N)
-y_sg = range(-2.75, 2.75, length=N)
-f_sg = (x,y) -> pdf(P_sg, vcat(x,y))
-z_sg = @. f_sg(x_sg',y_sg)
-pl_sg = contourf(x_sg, y_sg, z_sg, levels=20, lw=0, xticks=(tick0,[]), yticks=tick0, color=:Blues, cbar=false, ylab="Density")
-vline!([0], color=:black, alpha=0.1, lw=1)
-hline!([0], color=:black, alpha=0.1, lw=1)
+# Invariant vs non-invariant
+x = zeros(2, n)
+x[1,:] = rand(Pz, n)
+x = transform_all(G, x)
+p1 = plot(0, 0)
+hline!([0], color=:black, linealpha=0.1, linewidth=1)
+vline!([0], color=:black, linealpha=0.1, linewidth=1)
+scatter!(x[1,:], x[2,:], markercolor=:hotpink, title="Marginally invariant", markersize=3, markerstrokewidth=0, markeralpha=0.35)
 
-# Chi * von Mises
-P_c = Chi(2)
-P_vM = VonMises(π/4, 4)
-x_cvM = range(-2.75, 2.75, length=N)
-y_cvM = range(-2.75, 2.75, length=N)
-f_cvM = (x,y) -> begin
-    r = sqrt(x^2 + y^2)
-    return pdf(P_c,r) * pdf(P_vM,atan(y,x)) / r
+x = zeros(2, n)
+x[1,:] = rand(Pz, n)
+g = Vector{Float64}(undef, n)
+for i in 1:n
+    g[i] = rand_θ()
+    while abs(g[i]) > 5*π/3
+        g[i] = rand_θ()
+    end
 end
-z_cvM = @. f_cvM(x_cvM',y_cvM)
-pl_cvM = contourf(x_cvM, y_cvM, z_cvM, levels=20, lw=0, xticks=(tick0,[]), yticks=(tick0,[]), color=:Oranges, cbar=false)
-vline!([0], color=:black, alpha=0.1, lw=1)
-hline!([0], color=:black, alpha=0.1, lw=1)
+x = transform_each(G, x, g)
+p2 = plot(0, 0)
+hline!([0], color=:black, linealpha=0.1, linewidth=1)
+vline!([0], color=:black, linealpha=0.1, linewidth=1)
+scatter!(x[1,:], x[2,:], markercolor=:hotpink, title="Marginally non-invariant", markersize=3, markerstrokewidth=0, markeralpha=0.35)
 
-# Orbit-averaged chi
-P_u = Uniform(0, 2*π)
-x_g = range(-2.75, 2.75, length=N)
-y_g = range(-2.75, 2.75, length=N)
-f_g = (x,y) -> begin
-    r = sqrt(x^2 + y^2)
-    return pdf(P_c,r) * pdf(P_u,abs(atan(y,x))) / r
+# Equivariant vs non-equivariant
+n = 100
+x = [0 0 -1; 1. -1. 0]
+p_x = copy(x)
+p_x[:,2] = rotate_2D(x[:,2], π/4)
+col1 = :darkorchid
+col2 = :orange
+col3 = :green3
+
+# Equivariant
+Random.seed!(1)
+Σ = [0.2 0; 0 0.04]
+P = MvNormal(zeros(2), Σ)
+Σ3 = [0.04 0; 0 0.2]
+P3 = MvNormal(zeros(2), Σ3)
+# Y | X1 and Y | X2
+y1 = x[:,1] + [0; 1.25] .+ rand(P, n)
+y2 = transform_all(G, x[:,2]-[0;1.25].+rand(P,n), π/4)
+y3 = x[:,3] - [1.25;0] .+ rand(P3,n)
+
+p3 = plot(circle(0,0,1), seriestype=[:shape], lw=1, fillalpha=0, linealpha=0.04, linecolor=:black, title="Conditionally equivariant")
+plot!(circle(0,0,2.25), seriestype=[:shape], lw=1, fillalpha=0, linealpha=0.04, linecolor=:black)
+hline!([0], color=:black, linealpha=0.1, linewidth=1)
+vline!([0], color=:black, linealpha=0.1, linewidth=1)
+scatter!(y1[1,:], y1[2,:], markeralpha=0.35, color=col1, markerstrokewidth=0, markersize=3, markershape=:utriangle)
+scatter!(y2[1,:], y2[2,:], markeralpha=0.35, color=col2, markerstrokewidth=0, markersize=3, markershape=:utriangle)
+scatter!(y3[1,:], y3[2,:], markeralpha=0.35, color=col3, markerstrokewidth=0, markersize=3, markershape=:utriangle)
+scatter!(p_x[1,:], p_x[2,:], markeralpha=0.5, color=[col1,col2,col3], markersize=5)
+
+# Not equivariant
+Random.seed!(1)
+# Y | X1
+Σ1 = [0.2 0; 0 0.04]
+P1 = MvNormal(zeros(2), Σ1)
+y1 = x[:,1] + [0;1.25] .+ rand(P1,n)
+# Y | X2
+Σ2 = [0.04 0; 0 0.2]
+P2 = MvNormal(zeros(2), Σ2)
+y2 = transform_all(G, x[:,2]-[0;1.25].+rand(P2,n), π/4)
+# Y | X3
+Σ3 = [0.2 0; 0 0.2]
+P3 = MvNormal(zeros(2), Σ3)
+y3 = x[:,3] - [1.25;0] .+ rand(P3,n)
+
+p4 = plot(circle(0,0,1), seriestype=[:shape], lw=1, fillalpha=0, linealpha=0.04, linecolor=:black, title="Conditionally non-equivariant")
+plot!(circle(0,0,2.25), seriestype=[:shape], lw=1, fillalpha=0, linealpha=0.04, linecolor=:black)
+hline!([0], color=:black, linealpha=0.1, linewidth=1)
+vline!([0], color=:black, linealpha=0.1, linewidth=1)
+scatter!(y1[1,:], y1[2,:], markeralpha=0.35, color=col1, markerstrokewidth=0, markersize=3, markershape=:utriangle)
+scatter!(y2[1,:], y2[2,:], markeralpha=0.35, color=col2, markerstrokewidth=0, markersize=3, markershape=:utriangle)
+scatter!(y3[1,:], y3[2,:], markeralpha=0.35, color=col3, markerstrokewidth=0, markersize=3, markershape=:utriangle)
+scatter!(p_x[1,:], p_x[2,:], markeralpha=0.5, color=[col1,col2,col3], markersize=5)
+
+# Conditionally invariant vs non-conditionally invariant
+Random.seed!(1)
+Σ = [0.04 0; 0 0.2]
+P = MvNormal(zeros(2), Σ)
+# Y | X1, Y | X2, Y | X3
+y1 = [2.25;0] .+ rand(P, n)
+y2 = [2.25;0] .+ rand(P, n)
+y3 = [2.25;0] .+ rand(P, n)
+
+p5 = plot(circle(0,0,1), seriestype=[:shape], lw=1, fillalpha=0, linealpha=0.04, linecolor=:black, title="Conditionally invariant")
+plot!(circle(0,0,2.25), seriestype=[:shape], lw=1, fillalpha=0, linealpha=0.04, linecolor=:black)
+hline!([0], color=:black, linealpha=0.1, linewidth=1)
+vline!([0], color=:black, linealpha=0.1, linewidth=1)
+scatter!(y3[1,:], y3[2,:], markeralpha=0.35, color=col3, markerstrokewidth=0, markersize=3, markershape=:utriangle)
+scatter!(y1[1,:], y1[2,:], markeralpha=0.35, color=col1, markerstrokewidth=0, markersize=3, markershape=:utriangle)
+scatter!(y2[1,:], y2[2,:], markeralpha=0.35, color=col2, markerstrokewidth=0, markersize=3, markershape=:utriangle)
+scatter!(p_x[1,:], p_x[2,:], markeralpha=0.5, color=[col1,col2,col3], markersize=5)
+
+Random.seed!(1)
+Σ = [0.2 0; 0 0.04]
+P = MvNormal(zeros(2), Σ)
+Σ3 = [0.04 0; 0 0.2]
+P3 = MvNormal(zeros(2), Σ3)
+# Y | X1 and Y | X2
+y1 = x[:,1] + [0; 1.25] .+ rand(P, n)
+y2 = transform_all(G, x[:,2]-[0;1.25].+rand(P,n), π/4)
+y3 = x[:,3] - [1.25;0] .+ rand(P3,n)
+
+p6 = plot(circle(0,0,1), seriestype=[:shape], lw=1, fillalpha=0, linealpha=0.04, linecolor=:black, title="Conditionally non-invariant")
+plot!(circle(0,0,2.25), seriestype=[:shape], lw=1, fillalpha=0, linealpha=0.04, linecolor=:black)
+hline!([0], color=:black, linealpha=0.1, linewidth=1)
+vline!([0], color=:black, linealpha=0.1, linewidth=1)
+scatter!(y1[1,:], y1[2,:], markeralpha=0.35, color=col1, markerstrokewidth=0, markersize=3, markershape=:utriangle)
+scatter!(y2[1,:], y2[2,:], markeralpha=0.35, color=col2, markerstrokewidth=0, markersize=3, markershape=:utriangle)
+scatter!(y3[1,:], y3[2,:], markeralpha=0.35, color=col3, markerstrokewidth=0, markersize=3, markershape=:utriangle)
+scatter!(p_x[1,:], p_x[2,:], markeralpha=0.5, color=[col1,col2,col3], markersize=5)
+
+fig1 = plot(p1, p3, p5, p2, p4, p6, layout=grid(2,3), size=(525,375), legend=false, axis=false, aspect_ratio=1,
+           xlim=(-3,3), ylim=(-3,3), colorbar=false, bottom_margin=-3mm)
+fig1_name = dir_plt * "symmetries.pdf"
+savefig(fig1, fig1_name)
+println("Created $(fig1_name)")
+
+
+# Equivariance
+# ------------
+
+n = 100
+x = [0 0 -1.; 1. -1. 0]
+p_x = copy(x)
+p_x[:,2] = rotate_2D(x[:,2], π/4)
+ρx = [1 1 1; 0 0 0]
+col1 = :darkorchid
+col2 = :orange
+col3 = :green3
+
+# Equivariant
+Random.seed!(1)
+Σ = [0.2 0; 0 0.04]
+P = MvNormal(zeros(2), Σ)
+Σ3 = [0.04 0; 0 0.2]
+P3 = MvNormal(zeros(2), Σ3)
+# Y | X1 and Y | X2
+y1 = x[:,1] + [0; 1.25] .+ rand(P, n)
+y2 = transform_all(G, x[:,2]-[0;1.25].+rand(P,n), π/4)
+y3 = x[:,3] - [1.25;0] .+ rand(P3,n)
+
+p1 = plot(circle(0,0,1), seriestype=[:shape], lw=1, fillalpha=0, linealpha=0.04, linecolor=:black,
+          title=L"P_{Y|X}(\:\bullet\mid x)", ylab="Equivariant")
+plot!(circle(0,0,2.25), seriestype=[:shape], lw=1, fillalpha=0, linealpha=0.04, linecolor=:black)
+hline!([0], color=:black, linealpha=0.1, linewidth=1)
+vline!([0], color=:black, linealpha=0.1, linewidth=1)
+scatter!(y3[1,:], y3[2,:], markeralpha=0.35, color=col3, markerstrokewidth=0, markersize=3, markershape=:utriangle)
+scatter!(y1[1,:], y1[2,:], markeralpha=0.35, color=col1, markerstrokewidth=0, markersize=3, markershape=:utriangle)
+scatter!(y2[1,:], y2[2,:], markeralpha=0.35, color=col2, markerstrokewidth=0, markersize=3, markershape=:utriangle)
+scatter!(p_x[1,:], p_x[2,:], markeralpha=0.5, color=[col1,col2,col3], markersize=5)
+
+τy1 = similar(y1)
+τy2 = similar(y2)
+τy3 = similar(y2)
+for i in 1:n
+    τy1[:,i] = rotate_2D(y1[:,i], 3*π/2)
+    τy2[:,i] = rotate_2D(y2[:,i], π/4)
+    τy3[:,i] = rotate_2D(y3[:,i], float(π))
 end
-z_g = @. f_g(x_g',y_g)
-pl_g = contourf(x_g, y_g, z_g, levels=20, lw=0, xticks=(tick0,[]), yticks=(tick0,[]), color=:Greens, cbar=false)
-vline!([0], color=:black, alpha=0.1, lw=1)
-hline!([0], color=:black, alpha=0.1, lw=1)
+p2 = plot(circle(0,0,1), seriestype=[:shape], lw=1, fillalpha=0, linealpha=0.04, linecolor=:black,
+          title=L"\tau(x)_*P_{Y|X}(\:\bullet\mid x)")
+plot!(circle(0,0,2.25), seriestype=[:shape], lw=1, fillalpha=0, linealpha=0.04, linecolor=:black)
+hline!([0], color=:black, linealpha=0.1, linewidth=1)
+vline!([0], color=:black, linealpha=0.1, linewidth=1)
+scatter!(τy3[1,:], τy3[2,:], markeralpha=0.35, color=col3, markerstrokewidth=0, markersize=3, markershape=:utriangle)
+scatter!(τy1[1,:], τy1[2,:], markeralpha=0.35, color=col1, markerstrokewidth=0, markersize=3, markershape=:utriangle)
+scatter!(τy2[1,:], τy2[2,:], markeralpha=0.35, color=col2, markerstrokewidth=0, markersize=3, markershape=:utriangle)
+scatter!(ρx[1,:], ρx[2,:], markeralpha=0.5, color=[col1,col2,col3], markersize=5)
 
-# Make sample plots
-N = 50
-x_lims = (-4, 4)
-y_lims = (-4, 4)
+# Not equivariant
+Random.seed!(1)
+# Y | X1
+Σ1 = [0.2 0; 0 0.04]
+P1 = MvNormal(zeros(2), Σ1)
+y1 = x[:,1] + [0;1.25] .+ rand(P1,n)
+# Y | X2
+Σ2 = [0.04 0; 0 0.2]
+P2 = MvNormal(zeros(2), Σ2)
+y2 = transform_all(G, x[:,2]-[0;1.25].+rand(P2,n), π/4)
+# Y | X3
+Σ3 = [0.2 0; 0 0.2]
+P3 = MvNormal(zeros(2), Σ3)
+y3 = x[:,3] - [1.25;0] .+ rand(P3,n)
 
-x_sg = rand(P_sg, N)
-sc_sg = scatter(x_sg[1,:], x_sg[2,:], xlims=x_lims, ylims=y_lims, xticks=tick0, yticks=tick0,
-                markercolor=palette(:Blues)[6], markerstrokewidth=0, alpha=0.7, ylab="Samples")
-vline!([0], color=:black, alpha=0.1, lw=1)
-hline!([0], color=:black, alpha=0.1, lw=1)
+p3 = plot(circle(0,0,1), seriestype=[:shape], lw=1, fillalpha=0, linealpha=0.04, linecolor=:black, ylab="Non-equivariant")
+plot!(circle(0,0,2.25), seriestype=[:shape], lw=1, fillalpha=0, linealpha=0.04, linecolor=:black)
+hline!([0], color=:black, linealpha=0.1, linewidth=1)
+vline!([0], color=:black, linealpha=0.1, linewidth=1)
+scatter!(y3[1,:], y3[2,:], markeralpha=0.35, color=col3, markerstrokewidth=0, markersize=3, markershape=:utriangle)
+scatter!(y1[1,:], y1[2,:], markeralpha=0.35, color=col1, markerstrokewidth=0, markersize=3, markershape=:utriangle)
+scatter!(y2[1,:], y2[2,:], markeralpha=0.35, color=col2, markerstrokewidth=0, markersize=3, markershape=:utriangle)
+scatter!(p_x[1,:], p_x[2,:], markeralpha=0.5, color=[col1,col2,col3], markersize=5)
 
-x_c = vcat(rand(P_c,N)', fill(0,N)')
-
-x_cvM = Matrix{Float64}(undef, 2, N)
-θ_vM = rand(P_vM, N)
-for i in 1:N
-    x_cvM[:,i] = rotate_2D(x_c[:,i], θ_vM[i])
+for i in 1:n
+    τy1[:,i] = rotate_2D(y1[:,i], 3*π/2)
+    τy2[:,i] = rotate_2D(y2[:,i], π/4)
+    τy3[:,i] = rotate_2D(y3[:,i], float(π))
 end
-sc_cvM = scatter(x_cvM[1,:], x_cvM[2,:], xlims=x_lims, ylims=y_lims, xticks=tick0, yticks=(tick0,[]),
-    markercolor=palette(:Oranges)[6], markerstrokewidth=0, alpha=0.7)
-vline!([0], color=:black, alpha=0.1, lw=1)
-hline!([0], color=:black, alpha=0.1, lw=1)
+p4 = plot(circle(0,0,1), seriestype=[:shape], lw=1, fillalpha=0, linealpha=0.04, linecolor=:black)
+plot!(circle(0,0,2.25), seriestype=[:shape], lw=1, fillalpha=0, linealpha=0.04, linecolor=:black)
+hline!([0], color=:black, linealpha=0.1, linewidth=1)
+vline!([0], color=:black, linealpha=0.1, linewidth=1)
+scatter!(τy3[1,:], τy3[2,:], markeralpha=0.35, color=col3, markerstrokewidth=0, markersize=3, markershape=:utriangle)
+scatter!(τy1[1,:], τy1[2,:], markeralpha=0.35, color=col1, markerstrokewidth=0, markersize=3, markershape=:utriangle)
+scatter!(τy2[1,:], τy2[2,:], markeralpha=0.35, color=col2, markerstrokewidth=0, markersize=3, markershape=:utriangle)
+scatter!(ρx[1,:], ρx[2,:], markeralpha=0.5, color=[col1,col2,col3], markersize=5)
 
-x_g = Matrix{Float64}(undef, 2, N)
-θ_u = rand(P_u, N)
-for i in 1:N
-    x_g[:,i] = rotate_2D(x_c[:,i], θ_u[i])
-end
-sc_g = scatter(x_g[1,:], x_g[2,:], xlims=x_lims, ylims=y_lims, xticks=tick0, yticks=(tick0,[]),
-    markercolor=palette(:Greens)[6], markerstrokewidth=0, alpha=0.7)
-vline!([0], color=:black, alpha=0.05, lw=1)
-hline!([0], color=:black, alpha=0.05, lw=1)
-
-# Make representative inversion plots
-y_lims = [0, 2*π]
-x_lims = [1, 50]
-
-θ_sg = zeros(N)
-for i in 1:N
-    θ_sg[i] = tau_inv_rotate_2D(x_sg[:,i])
-end
-cdf_sg = plot(1:N, sort(θ_sg), linecolor=palette(:Blues)[6], grid=true,
-              xlims=x_lims, ylims=y_lims, ylab=L"Sorted $\tau(X)^{-1}$", xticks=tick0)
-
-θ_cvM = zeros(N)
-for i in 1:N
-    θ_cvM[i] = tau_inv_rotate_2D(x_cvM[:,i])
-end
-cdf_cvM = plot(1:N, sort(θ_cvM), linecolor=palette(:Oranges)[6], xlims=x_lims, ylims=y_lims, xticks=tick0, grid=true)
-
-θ_g = zeros(N)
-for i in 1:N
-    θ_g[i] = tau_inv_rotate_2D(x_g[:,i])
-end
-cdf_g = plot(1:N, sort(θ_g), linecolor=palette(:Greens)[6], xlims=x_lims, ylims=y_lims, xticks=tick0, grid=true)
-
-fig = plot(pl_sg, pl_cvM, pl_g,
-           sc_sg, sc_cvM, sc_g,
-           cdf_sg, cdf_cvM, cdf_g,
-           layout=grid(3,3,heights=[0.38,0.38,0.24]), size=(525,425))
-fig_name_pdf = dir_plt * "densities.pdf"
-fig_name_png = dir_plt * "densities.png"  # Note: manually convert this to PDF due to issue with savefig and PDFs
-savefig(fig, fig_name_pdf)
-println("Created $(fig_name_pdf)")
-savefig(fig, fig_name_png)
-println("Created $(fig_name_png)")
+fig2 = plot(p1, p2, p3, p4, layout=grid(2,2), size=(350,300), bottom_margin=-5mm,
+           xaxis=false, yaxis=false, aspect_ratio=1, xlims=(-3,3), ylims=(-3,3))
+fig2_name = dir_plt * "equivariance.pdf"
+savefig(fig2, fig2_name)
+println("Created $(fig2_name)")
 
 
-# SO(4) experiment: increasing parameters
-# ---------------------------------------
+# Gaussian equivariance covariance experiments
+# --------------------------------------------
+
+println("Creating equivariance covariance plots")
+
+# Set up experiment parameters
+ps = GV_GAUSS_COV_p
+n_p = length(ps)
+
+ns = GV_GAUSS_COV_n
+n_n = length(ns)
+
+ds = GV_GAUSS_COV_d
+n_d = length(ds)
 
 # Read experiment results
-df_d = CSV.read(dir_out*"invariance_rotation_dvar_N1000_n200_M2_B200.csv", DataFrame)
-df_n = CSV.read(dir_out*"invariance_rotation_d4_N1000_nvar_M2_200.csv", DataFrame)
-df_M = CSV.read(dir_out*"invariance_rotation_d4_N1000_n200_Mvar_B200.csv", DataFrame)
+n_tests = length(all_tests)
+means = Array{Float64}(undef, n_tests, n_n, n_p, n_d)
+sds = Array{Float64}(undef, n_tests, n_n, n_p, n_d)
+@views @inbounds @threads for i in 1:n_d
+    for j in 1:n_p
+        for k in 1:n_n
+            pvals = CSV.read(dir_out*"gauss_cov_SO$(ds[i])_N1000_B100_n$(ns[k])_p$(ps[j]).csv", DataFrame)
+            compute_rej_rate(pvals, all_tests, means[:,k,j,i], sds[:,k,j,i])
+        end
+    end
+end
 
 # Make plots
-H0_lims = [0, 0.10]
-H1_lims = [0, 1]
-time_lims = [0, 8]
-
-ds = [5,10,15,20]
-fig_d0 = plot_rej(df_d, ds, "H0.*"; ylab=L"$H_0$ rej. rate", ylims=H0_lims, pl_yticks=true)
-fig_d1 = plot_rej(df_d, ds, "H1.*", ylab=L"$H_1$ rej. rate", ylims=H1_lims, pl_yticks=true)
-fig_dt = plot_time(df_d, ds, "H1.*", xlab="Dimensions", ylab="Avg. time (s)", ylims=time_lims, pl_xticks=true, pl_yticks=true)
-
-ns = [50,100,200,400]
-fig_n0 = plot_rej(df_n, ns, "H0.*", ylims=H0_lims)
-fig_n1 = plot_rej(df_n, ns, "H1.*", ylims=H1_lims)
-fig_nt = plot_time(df_n, ns, "H1.*", xlab="Sample size", ylims=time_lims, pl_xticks=true)
-
-Ms = collect(1:5)
-fig_M0 = plot_rej(df_M, Ms, "H0.*", ylims=H0_lims)
-fig_M1 = plot_rej(df_M, Ms, "H1.*", ylims=H1_lims)
-fig_Mt = plot_time(df_M, Ms, "H1.*", xlab="Group actions", ylims=time_lims, pl_xticks=true)
-
-legend = plot([0 0 0 0], showaxis=false, legend=true, label=reshape(df_d[:,"Test"],1,4), legendcolumns=4,
-              foreground_color_legend=nothing, color=[colsDict[GV_2S] colsDict[GV_MMD] colsDict[GV_NMMD] colsDict[GV_CW]])
-l = @layout [a{0.01h} ; grid(3,3)]
-fig = plot(legend,
-           fig_d0, fig_n0, fig_M0,
-           fig_d1, fig_n1, fig_M1,
-           fig_dt, fig_nt, fig_Mt,
-           layout=l, size=(600,375))
-fig_name = dir_plt * "invariance_so4.pdf"
+figs = Matrix{Any}(undef, n_p, n_d)
+@views @inbounds for i in 1:n_d
+    for j in 1:n_p
+        xticks = i==n_d
+        yticks = j==1
+        ylab = j==1 ? L"d=%$(ds[i])" : ""
+        title = i==1 ? L"p=%$(min(ps[j],0.99))" : ""
+        figs[j,i] = plot_rej_rate(means[:,:,j,i], sds[:,:,j,i], all_tests_r, ns,
+                                  ylab=ylab, title=title, pl_xticks=xticks, pl_yticks=yticks)
+    end
+end
+p_xlab = shared_xlab(L"n", top_margin=0mm)
+p_ylab = shared_ylab("Reject rate", right_margin=4.5mm)
+l = @layout [c{0.0001w} [a{0.03h} ; grid(n_d,n_p) ; b{0.03h}]]
+fig = plot(p_ylab, leg,
+                   figs...,
+                   p_xlab, layout=l, size=(600,325))
+fig_name = dir_plt * "gauss_equiv_cov.pdf"
 savefig(fig, fig_name)
 println("Created $(fig_name)")
 
+@views @inbounds for i in 1:n_d
+    for j in 1:n_p
+        xticks = i==n_d
+        yticks = j==1
+        ylab = j==1 ? L"d=%$(ds[i])" : ""
+        title = i==1 ? L"p=%$(min(ps[j],0.99))" : ""
+        figs[j,i] = plot_rej_rate_all(means[:,:,j,i], sds[:,:,j,i], all_tests, ns,
+                                      ylab=ylab, title=title, pl_xticks=xticks, pl_yticks=yticks)
+    end
+end
+p_xlab = shared_xlab(L"n", top_margin=0mm)
+p_ylab = shared_ylab("Reject rate", right_margin=4.5mm)
+l = @layout [c{0.0001w} [a{0.03h} ; grid(n_d,n_p) ; b{0.03h}]]
+fig = plot(p_ylab, leg,
+                   figs...,
+                   p_xlab, layout=l, size=(600,325))
+fig_name = dir_plt * "gauss_equiv_cov_all.pdf"
+savefig(fig, fig_name)
+println("Created $(fig_name)")
 
-# Exchangeability experiment: increasing number of random projections
-# -------------------------------------------------------------------
+# p-values
+n_tests = length(test_labs)
+figsi = Matrix{Any}(undef, n_p, n_tests)
+figsr = Matrix{Any}(undef, n_p, n_tests)
+@views @inbounds @threads for i in 1:n_p
+    pvals = CSV.read(dir_out*"gauss_cov_SO$(ds[1])_N1000_B100_n250_p$(ps[i]).csv", DataFrame)
+    for j in 1:n_tests
+        last_row = j==n_tests
+        title = j==1 ? L"p=%$(min(ps[i],0.99))" : ""
+        ylab = i==1 ? test_labs[j] : ""
+        figsi[i,j] = hist(pvals, all_tests_i[j], ylab, title=title, last_row=last_row)
+        figsr[i,j] = hist(pvals, all_tests_r[j], ylab, title=title, last_row=last_row)
+    end
+end
+
+p_title = shared_xlab("Independent comparison sets", bottom_margin=-3mm)
+p_xlab = shared_xlab(L"$p$-value", top_margin=-1mm)
+p_ylab = shared_ylab("Frequency", right_margin=6mm)
+l = @layout [c{0.0001w} [c{0.03h} ; grid(n_tests,n_p) ; b{0.03h}]]
+figi = plot(p_ylab, p_title, figsi..., p_xlab, layout=l, size=(450,300))
+figi_name = dir_plt * "pval_gauss_equiv_cov_indep.pdf"
+savefig(figi, figi_name)
+
+p_title = shared_xlab("Reused comparison set", bottom_margin=-3mm)
+p_xlab = shared_xlab(L"$p$-value", top_margin=-1mm)
+p_ylab = shared_ylab("Frequency", right_margin=6mm)
+l = @layout [c{0.0001w} [c{0.03h} ; grid(n_tests,n_p) ; b{0.03h}]]
+figr = plot(p_ylab, p_title, figsr..., p_xlab, layout=l, size=(450,300))
+figr_name = dir_plt * "pval_gauss_equiv_cov_reuse.pdf"
+savefig(figr, figr_name)
+
+println("Created $(figi_name) and $(figr_name)")
+
+
+# Gaussian non-equivariance covariance experiments
+# ------------------------------------------------
+
+println("Creating non-equivariance covariance plots")
+
+# Set up experiment parameters
+ps = GV_GAUSS_COV_p[2:end]
+n_p = length(ps)
+
+ns = GV_GAUSS_COV_n
+n_n = length(ns)
+
+ds = GV_GAUSS_COV_d
+n_d = length(ds)
 
 # Read experiment results
-df = CSV.read(dir_out*"invariance_exchangeability_d10_N1000_n200_M2_B200_Jvar.csv", DataFrame)
+n_tests = length(all_tests)
+means = Array{Float64}(undef, n_tests, n_n, n_p, n_d)
+sds = Array{Float64}(undef, n_tests, n_n, n_p, n_d)
+@views @inbounds @threads for i in 1:n_d
+    for j in 1:n_p
+        for k in 1:n_n
+            pvals = CSV.read(dir_out*"gauss_nonequiv_cov_SO$(ds[i])_N1000_B100_n$(ns[k])_p$(ps[j]).csv", DataFrame)
+            compute_rej_rate(pvals, all_tests, means[:,k,j,i], sds[:,k,j,i])
+        end
+    end
+end
 
-# Make plot
-Js = collect(5:5:50)
-
-fig_J0p = plot_rej(df, Js, "H0\\+.*", ylims=[0,0.1], ylab="Rej. rate", pl_yticks=true)
-fig_J0m = plot_rej(df, Js, "H0-.*", ylims=[0,0.1], pl_yticks=true)
-fig_J1 = plot_rej(df, Js, "H1.*", ylims=[0,1], pl_yticks=true)
-
-fig_Jt_0p = plot_time(df, Js, "H0\\+.*", ylab="Avg. time (s)", pl_xticks=true, pl_yticks=true)
-fig_Jt_0m = plot_time(df, Js, "H0-.*", xlab="Rand. projections", pl_xticks=true, pl_yticks=true)
-fig_Jt_1 = plot_time(df, Js, "H1.*", pl_xticks=true, pl_yticks=true)
-
-legend = plot([0 0], legend=true, showaxis=false, label=reshape(df[:,"Test"],1,2), legendcolumns=2,
-              foreground_color_legend=nothing, color=[colsDict[GV_NMMD] colsDict[GV_CW]])
-
-l = @layout[grid(2,3) ; a{0.01h}]
-fig = plot(fig_J0p, fig_J0m, fig_J1,
-           fig_Jt_0p, fig_Jt_0m, fig_Jt_1,
-           legend, title=[L"H_0^+" L"H_0^-" L"H_1" "" "" "" ""], top_margin=1mm, layout=l, size=(525,300))
-fig_name = dir_plt * "invariance_exch.pdf"
+# Make plots
+figs = Matrix{Any}(undef, n_p, n_d)
+@views @inbounds for i in 1:n_d
+    for j in 1:n_p
+        xticks = i==n_d
+        yticks = j==1
+        ylab = j==1 ? L"d=%$(ds[i])" : ""
+        title = i==1 ? L"p=%$(min(ps[j],0.99))" : ""
+        figs[j,i] = plot_rej_rate(means[:,:,j,i], sds[:,:,j,i], all_tests_r, ns,
+                                  ylab=ylab, title=title, pl_xticks=xticks, pl_yticks=yticks)
+    end
+end
+p_xlab = shared_xlab(L"n", top_margin=0mm)
+p_ylab = shared_ylab("Reject rate", right_margin=4.5mm)
+l = @layout [c{0.0001w} [a{0.03h} ; grid(n_d,n_p) ; b{0.03h}]]
+fig = plot(p_ylab, leg,
+                   figs...,
+                   p_xlab, layout=l, size=(500,325))
+fig_name = dir_plt * "gauss_nonequiv_cov.pdf"
 savefig(fig, fig_name)
 println("Created $(fig_name)")
 
+@views @inbounds for i in 1:n_d
+    for j in 1:n_p
+        xticks = i==n_d
+        yticks = j==1
+        ylab = j==1 ? L"d=%$(ds[i])" : ""
+        title = i==1 ? L"p=%$(min(ps[j],0.99))" : ""
+        figs[j,i] = plot_rej_rate_all(means[:,:,j,i], sds[:,:,j,i], all_tests, ns,
+                                      ylab=ylab, title=title, pl_xticks=xticks, pl_yticks=yticks)
+    end
+end
+p_xlab = shared_xlab(L"n", top_margin=0mm)
+p_ylab = shared_ylab("Reject rate", right_margin=4.5mm)
+l = @layout [c{0.0001w} [a{0.03h} ; grid(n_d,n_p) ; b{0.03h}]]
+fig = plot(p_ylab, leg,
+                   figs...,
+                   p_xlab, layout=l, size=(500,325))
+fig_name = dir_plt * "gauss_nonequiv_cov_all.pdf"
+savefig(fig, fig_name)
+println("Created $(fig_name)")
 
-# SO(4) and exchangeability invariance p-values
+# p-values
+n_tests = length(test_labs)
+figsi = Matrix{Any}(undef, n_p, n_tests)
+figsr = Matrix{Any}(undef, n_p, n_tests)
+@views @inbounds @threads for i in 1:n_p
+    pvals = CSV.read(dir_out*"gauss_nonequiv_cov_SO$(ds[1])_N1000_B100_n250_p$(ps[i]).csv", DataFrame)
+    for j in 1:n_tests
+        last_row = j==n_tests
+        title = j==1 ? L"p=%$(min(ps[i],0.99))" : ""
+        ylab = i==1 ? test_labs[j] : ""
+        figsi[i,j] = hist(pvals, all_tests_i[j], ylab, title=title, last_row=last_row)
+        figsr[i,j] = hist(pvals, all_tests_r[j], ylab, title=title, last_row=last_row)
+    end
+end
+
+p_title = shared_xlab("Independent comparison sets", bottom_margin=-3mm)
+p_xlab = shared_xlab(L"$p$-value", top_margin=-1mm)
+p_ylab = shared_ylab("Frequency", right_margin=5mm)
+l = @layout [c{0.0001w} [c{0.03h} ; grid(n_tests,n_p) ; b{0.03h}]]
+figi = plot(p_ylab, p_title, figsi..., p_xlab, layout=l, size=(375,300))
+figi_name = dir_plt * "pval_gauss_nonequiv_cov_indep.pdf"
+savefig(figi, figi_name)
+
+p_title = shared_xlab("Reused comparison set", bottom_margin=-3mm)
+p_xlab = shared_xlab(L"$p$-value", top_margin=-1mm)
+p_ylab = shared_ylab("Frequency", right_margin=5mm)
+l = @layout [c{0.0001w} [c{0.03h} ; grid(n_tests,n_p) ; b{0.03h}]]
+figr = plot(p_ylab, p_title, figsr..., p_xlab, layout=l, size=(375,300))
+figr_name = dir_plt * "pval_gauss_nonequiv_cov_reuse.pdf"
+savefig(figr, figr_name)
+
+println("Created $(figi_name) and $(figr_name)")
+
+
+# Gaussian equivariance truth experiments
+# --------------------------------------------
+
+println("Creating equivariance truth plots")
+
+# Set up experiment parameters
+ps = GV_GAUSS_TRUTH_p
+n_p = length(ps)
+
+ns = GV_GAUSS_TRUTH_n
+n_n = length(ns)
+
+ds = GV_GAUSS_TRUTH_d
+n_d = length(ds)
+
+es = ["", "_truth"]
+n_e = length(es)
+
+# Read experiment results
+n_tests = length(all_tests)
+means = Array{Float64}(undef, n_tests, n_n, n_p, n_d, n_e)
+sds = Array{Float64}(undef, n_tests, n_n, n_p, n_d, n_e)
+@views @inbounds @threads for e in 1:n_e
+    for i in 1:n_d
+        for j in 1:n_p
+            for k in 1:n_n
+                pvals = CSV.read(dir_out*"gauss_truth$(es[e])_N1000_B100_n$(ns[k])_p$(ps[j])_d$(ds[i]).csv", DataFrame)
+                compute_rej_rate(pvals, all_tests, means[:,k,j,i,e], sds[:,k,j,i,e])
+            end
+        end
+    end
+end
+
+# Make plots
+function plot_truth(means::AbstractArray{Float64}, sds::AbstractArray{Float64},
+                    tests::AbstractVector{String}, x::AbstractVector{<:Number};
+                    title="", xlab="", ylab="", ylims=(0,1), pl_xticks=false, pl_yticks=false, all_tests=all_tests)
+    p = plot(xlab=xlab, ylab=ylab, xlims=(minimum(x),maximum(x)), ylims=ylims, grid=true, title=title)
+    @views @inbounds for test in tests
+        i = findall(x->x==test, all_tests)[1]
+        plot!(x, means[i,:,2], linecolor=colsDict[test], linealpha=1, linewidth=2, linestyle=:dot, label=test)
+        plot!(x, means[i,:,1], linecolor=colsDict[test], linealpha=0.5, linewidth=2, label=test)
+    end
+    if !pl_xticks
+        plot!(xticks = (xticks(p)[1][1],""))
+    end
+    if !pl_yticks
+        plot!(yticks = (yticks(p)[1][1],""))
+    end
+    return p
+end
+figsr = Matrix{Any}(undef, n_p, n_d)
+figsi = Matrix{Any}(undef, n_p, n_d)
+@views @inbounds for i in 1:n_d
+    for j in 1:n_p
+        xticks = i==n_d
+        yticks = j==1
+        ylab = j==1 ? L"d=%$(ds[i])" : ""
+        title = i==1 ? L"p=%$(min(ps[j],0.99))" : ""
+        figsr[j,i] = plot_truth(means[:,:,j,i,:], sds[:,:,j,i,:], all_tests_r, ns,
+                                ylab=ylab, title=title, pl_xticks=xticks, pl_yticks=yticks)
+        figsi[j,i] = plot_truth(means[:,:,j,i,:], sds[:,:,j,i,:], all_tests_i, ns,
+                                ylab=ylab, title=title, pl_xticks=xticks, pl_yticks=yticks)
+    end
+end
+p_xlab = shared_xlab(L"n", top_margin=0mm)
+p_ylab = shared_ylab("Reject rate", right_margin=4.5mm)
+l = @layout [c{0.0001w} [a{0.03h} ; grid(n_d,n_p) ; b{0.03h}]]
+figr = plot(p_ylab, leg,
+                    figsr...,
+                    p_xlab, layout=l, size=(600,325))
+figr_name = dir_plt * "gauss_equiv_truth_reuse.pdf"
+savefig(figr, figr_name)
+println("Created $(figr_name)")
+
+p_xlab = shared_xlab(L"n", top_margin=0mm)
+p_ylab = shared_ylab("Reject rate", right_margin=4.5mm)
+l = @layout [c{0.0001w} [a{0.03h} ; grid(n_d,n_p) ; b{0.03h}]]
+figi = plot(p_ylab, leg,
+                    figsi...,
+                    p_xlab, layout=l, size=(600,325))
+figi_name = dir_plt * "gauss_equiv_truth_indep.pdf"
+savefig(figi, figi_name)
+println("Created $(figi_name)")
+
+# p-values
+n_tests = length(test_labs)
+figsi = Matrix{Any}(undef, n_p, n_tests)
+figsr = Matrix{Any}(undef, n_p, n_tests)
+figsi_t = Matrix{Any}(undef, n_p, n_tests)
+figsr_t = Matrix{Any}(undef, n_p, n_tests)
+@views @inbounds @threads for i in 1:n_p
+    pvals = CSV.read(dir_out*"gauss_truth_N1000_B100_n250_p$(ps[i])_d3.csv", DataFrame)
+    for j in 1:n_tests
+        last_row = j==n_tests
+        title = j==1 ? L"p=%$(min(ps[i],0.99))" : ""
+        ylab = i==1 ? test_labs[j] : ""
+        figsi[i,j] = hist(pvals, all_tests_i[j], ylab, title=title, last_row=last_row)
+        figsr[i,j] = hist(pvals, all_tests_r[j], ylab, title=title, last_row=last_row)
+    end
+    pvals = CSV.read(dir_out*"gauss_truth_truth_N1000_B100_n250_p$(ps[i])_d3.csv", DataFrame)
+    for j in 1:n_tests
+        last_row = j==n_tests
+        title = j==1 ? L"p=%$(min(ps[i],0.99))" : ""
+        ylab = i==1 ? test_labs[j] : ""
+        figsi_t[i,j] = hist(pvals, all_tests_i[j], ylab, title=title, last_row=last_row)
+        figsr_t[i,j] = hist(pvals, all_tests_r[j], ylab, title=title, last_row=last_row)
+    end
+end
+
+p_title = shared_xlab("Independent comparison sets (Approx. sampling)", bottom_margin=-3mm)
+p_xlab = shared_xlab(L"$p$-value", top_margin=-1mm)
+p_ylab = shared_ylab("Frequency", right_margin=6mm)
+l = @layout [c{0.0001w} [c{0.03h} ; grid(n_tests,n_p) ; b{0.03h}]]
+figi = plot(p_ylab, p_title, figsi..., p_xlab, layout=l, size=(450,300))
+figi_name = dir_plt * "pval_gauss_equiv_truth_indep_apx.pdf"
+savefig(figi, figi_name)
+
+p_title = shared_xlab("Independent comparison sets (Exact sampling)", bottom_margin=-3mm)
+p_xlab = shared_xlab(L"$p$-value", top_margin=-1mm)
+p_ylab = shared_ylab("Frequency", right_margin=6mm)
+l = @layout [c{0.0001w} [c{0.03h} ; grid(n_tests,n_p) ; b{0.03h}]]
+figi_t = plot(p_ylab, p_title, figsi_t..., p_xlab, layout=l, size=(450,300))
+figi_t_name = dir_plt * "pval_gauss_equiv_truth_indep_true.pdf"
+savefig(figi_t, figi_t_name)
+
+p_title = shared_xlab("Reused comparison set (Approx. sampling)", bottom_margin=-3mm)
+p_xlab = shared_xlab(L"$p$-value", top_margin=-1mm)
+p_ylab = shared_ylab("Frequency", right_margin=6mm)
+l = @layout [c{0.0001w} [c{0.03h} ; grid(n_tests,n_p) ; b{0.03h}]]
+figr = plot(p_ylab, p_title, figsr..., p_xlab, layout=l, size=(450,300))
+figr_name = dir_plt * "pval_gauss_equiv_truth_reuse_apx.pdf"
+savefig(figr, figr_name)
+
+p_title = shared_xlab("Reused comparison set (Exact sampling)", bottom_margin=-3mm)
+p_xlab = shared_xlab(L"$p$-value", top_margin=-1mm)
+p_ylab = shared_ylab("Frequency", right_margin=6mm)
+l = @layout [c{0.0001w} [c{0.03h} ; grid(n_tests,n_p) ; b{0.03h}]]
+figr_t = plot(p_ylab, p_title, figsr_t..., p_xlab, layout=l, size=(450,300))
+figr_t_name = dir_plt * "pval_gauss_equiv_truth_reuse_true.pdf"
+savefig(figr_t, figr_t_name)
+
+println("Created $(figi_name) and $(figr_name)")
+println("Created $(figi_t_name) and $(figr_t_name)")
+
+
+# Gaussian equivariance permutation experiments
 # ---------------------------------------------
 
-# Read experiment results
-pv_rot = CSV.read(dir_out*"invariance_rotation_d4_N1000_n200_M2_B200.csv", DataFrame)
-pv_exch = CSV.read(dir_out*"invariance_exchangeability_d10_N1000_n200_M2_B200.csv", DataFrame)
+println("Creating equivariance permutation plots")
 
-# Set seed for reproducibility
-Random.seed!(1)
+# Set up experiment parameters
+ns = GV_GAUSS_PER_n
+n_n = length(ns)
 
-# Make plot
-r01 = hist(GV_2S, pv_rot[!,:H0_2SMMD_p], "2SMMD", title=L"Rot. $H_0$")
-r02 = hist(GV_MMD, pv_rot[!,:H0_MMD_p], "MMD")
-r03 = hist(GV_NMMD, pv_rot[!,:H0_NMMD_p], "NMMD")
-r04 = hist(GV_CW, pv_rot[!,:H0_CW_p], "CW", last_row=true, p_col=:grey15)
+ss = GV_GAUSS_PER_s
+n_s = length(ss)
 
-r11 = hist(GV_2S, pv_rot[!,:H1_2SMMD_p], title=L"Rot. $H_1$", p_col=:grey15)
-r12 = hist(GV_MMD, pv_rot[!,:H1_MMD_p], p_col=:grey15)
-r13 = hist(GV_NMMD, pv_rot[!,:H1_NMMD_p], p_col=:grey15)
-r14 = hist(GV_CW, pv_rot[!,:H1_CW_p], last_row=true, p_col=:grey15)
-
-e01p = hist(GV_2S, pv_exch[!,"H0+_2SMMD_p"], title=L"Exch. $H_0^+$")
-e02p = hist(GV_MMD, pv_exch[!,"H0+_MMD_p"])
-e03p = hist(GV_NMMD, pv_exch[!,"H0+_NMMD_p"])
-e04p = hist(GV_CW, pv_exch[!,"H0+_CW_p"], last_row=true, p_col=:grey15)
-
-e01m = hist(GV_2S, pv_exch[!,"H0-_2SMMD_p"], title=L"Exch. $H_0^-$")
-e02m = hist(GV_MMD, pv_exch[!,"H0-_MMD_p"])
-e03m = hist(GV_NMMD, pv_exch[!,"H0-_NMMD_p"])
-e04m = hist(GV_CW, pv_exch[!,"H0-_CW_p"], last_row=true, p_col=:grey15)
-
-e11 = hist(GV_2S, pv_exch[!,"H1_2SMMD_p"], title=L"Exch. $H_1$", p_col=:grey15)
-e12 = hist(GV_MMD, pv_exch[!,"H1_MMD_p"], p_col=:grey15)
-e13 = hist(GV_NMMD, pv_exch[!,"H1_NMMD_p"], p_y=50, p_col=:grey15)
-e14 = hist(GV_CW, pv_exch[!,"H1_CW_p"], last_row=true, p_col=:grey15)
-
-l = @layout [grid(4,5) ; a{0.02h}]
-fig = plot(r01, r11, e01p, e01m, e11,
-           r02, r12, e02p, e02m, e12,
-           r03, r13, e03p, e03m, e13,
-           r04, r14, e04p, e04m, e14,
-           xlab_pv, layout=l, size=(550,400), left_margin=2mm)
-fig_name = dir_plt * "invariance_so4_exch_pvals.pdf"
-savefig(fig, fig_name)
-println("Created $(fig_name)")
-
-
-# SO(3) invariance p-values
-# -------------------------
+ds = GV_GAUSS_PER_d
+n_d = length(ds)
 
 # Read experiment results
-pv_so3 = CSV.read(dir_out*"invariance_SO3_N1000_n100_M2_B200.csv", DataFrame)
-
-# Set seed for reproducibility
-Random.seed!(1)
-
-# Make plot
-s01 = hist(GV_2S, pv_so3[!,:H0_2SMMD_p], "2SMMD", title=L"H_0")
-s02 = hist(GV_MMD, pv_so3[!,:H0_MMD_p], "MMD")
-s03 = hist(GV_NMMD, pv_so3[!,:H0_NMMD_p], "NMMD", last_row=true)
-
-s11 = hist(GV_2S, pv_so3[!,:H1_2SMMD_p], title=L"H_1", p_col=:grey15)
-s12 = hist(GV_MMD, pv_so3[!,:H1_MMD_p], p_col=:grey15)
-s13 = hist(GV_NMMD, pv_so3[!,:H1_NMMD_p], last_row=true, p_col=:grey15, p_y=67)
-
-l = @layout [grid(3,2) ; a{0.02h}]
-fig = plot(s01, s11,
-           s02, s12,
-           s03, s13,
-           xlab_pv, layout=l, size=(240,330))
-fig_name = dir_plt * "invariance_so3_pvals.pdf"
-savefig(fig, fig_name)
-println("Created $(fig_name)")
-
-
-# SWARM data visualization
-# ------------------------
-
-# Read in data
-fid = h5open(dir_out_dat*"SWARM.h5", "r")
-SWARM = copy(read(fid["data"]))
-close(fid)
-n_SWARM = size(SWARM, 2)
-n = 220
-
-function SWARM_sample_data(n)
-    data = SWARM
-    n_data = n_SWARM
-    inds = sample(1:n_data, n, replace=false)
-    x = data[1:3, inds]
-    y = reshape(data[4,inds], 1, n)
-    return OneSampleData(x=x, y=y)
+n_tests = length(all_tests)
+means = Array{Float64}(undef, n_tests, n_n, n_s, n_d)
+sds = Array{Float64}(undef, n_tests, n_n, n_s, n_d)
+@views @inbounds @threads for i in 1:n_d
+    for j in 1:n_s
+        for k in 1:n_n
+            pvals = CSV.read(dir_out*"gauss_perm_S$(ds[i])_N1000_B100_n$(ns[k])_s$(ss[j]).csv", DataFrame)
+            compute_rej_rate(pvals, all_tests, means[:,k,j,i], sds[:,k,j,i])
+        end
+    end
 end
 
-# Set seed for reproducibility
-Random.seed!(1)
-dat = SWARM_sample_data(n)
-x = dat.x
-y = dat.y
-
-# Make plot
-cols = cgrad([:orchid1, :midnightblue])
-p_xy = scatter(x[1,:],x[2,:], alpha=0.7, c=cols)
-p_xz = scatter(x[1,:],x[3,:], alpha=0.7, c=cols)
-p_yz = scatter(x[2,:],x[3,:], alpha=0.7, c=cols)
-
-fig = plot(p_xy, p_xz, p_yz,
-           layout=(1,3), title=[L"X_1:X_2" L"X_1:X_3" L"X_2:X_3"], framestyle=:none, size=(500,150), margin=2mm,
-           zcolor=y[:], markerstrokewidth=0, cbar=false, xticks=[], yticks=[])
-fig_name = dir_plt * "SWARM_data.pdf"
+# Make plots
+figs = Matrix{Any}(undef, n_s, n_d)
+@views @inbounds for i in 1:n_d
+    for j in 1:n_s
+        xticks = i==n_d
+        yticks = j==1
+        ylab = j==1 ? L"d=%$(ds[i])" : ""
+        title = i==1 ? L"s=%$(ss[j])" : ""
+        figs[j,i] = plot_rej_rate(means[:,:,j,i], sds[:,:,j,i], all_tests_r, ns, 
+                                  ylab=ylab, title=title, pl_xticks=xticks, pl_yticks=yticks)
+    end
+end
+p_xlab = shared_xlab(L"n", top_margin=0mm)
+p_ylab = shared_ylab("Reject rate", right_margin=4.5mm)
+l = @layout [c{0.0001w} [a{0.03h} ; grid(n_d,n_s); b{0.03h}]]
+fig = plot(p_ylab, leg,
+                   figs...,
+                   p_xlab, layout=l, size=(600,325))
+fig_name = dir_plt * "gauss_equiv_perm_reuse.pdf"
 savefig(fig, fig_name)
 println("Created $(fig_name)")
 
-
-# SWARM conditional invariance p-value distributions
-# --------------------------------------------------
-
-# Read experiment results
-pv_swarm = CSV.read(dir_out*"SWARM_conditional_invariance_N1000_n220_B200.csv", DataFrame)
-
-# Make plot
-pX = hist(GV_KCI, pv_swarm[!,:X_inv_KCI_p], "KCI", title=L"$X_1$-axis", x_ticks=[0,0.25,0.5], last_row=true, bw=0.05, KS=false)
-pY = hist(GV_KCI, pv_swarm[!,:Y_inv_KCI_p], title=L"$X_2$-axis", x_ticks=[0,0.25,0.5], last_row=true, bw=0.05, bins=20, KS=false)
-pZ = hist(GV_KCI, pv_swarm[!,:Z_inv_KCI_p], title=L"$X_3$-axis", x_ticks=[0,0.25,0.5], last_row=true, bw=0.05, KS=false)
-vline!([0.075], color=:darkorange, lw=1.5)
-pNP = hist(GV_KCI, pv_swarm[!,:NP_KCI_p], title="geomag. NP", x_ticks=[0,0.25,0.5], last_row=true, bw=0.05, KS=false)
-
-l = @layout [grid(1,4) ; a{0.1h}]
-fig = plot(pX, pY, pZ, pNP,
-           xlab_pv, layout=l, size=(500,140), top_margin=1mm, left_margin=3.5mm)
-fig_name = dir_plt * "SWARM_cond_indep_pvals.pdf"
+@views @inbounds for i in 1:n_d
+    for j in 1:n_s
+        xticks = i==n_d
+        yticks = j==1
+        ylab = j==1 ? L"d=%$(ds[i])" : ""
+        title = i==1 ? L"s=%$(ss[j])" : ""
+        figs[j,i] = plot_rej_rate(means[:,:,j,i], sds[:,:,j,i], all_tests_i, ns, 
+                                  ylab=ylab, title=title, pl_xticks=xticks, pl_yticks=yticks)
+    end
+end
+p_xlab = shared_xlab(L"n", top_margin=0mm)
+p_ylab = shared_ylab("Reject rate", right_margin=4.5mm)
+l = @layout [c{0.0001w} [a{0.03h} ; grid(n_d,n_s); b{0.03h}]]
+fig = plot(p_ylab, leg,
+                   figs...,
+                   p_xlab, layout=l, size=(600,325))
+fig_name = dir_plt * "gauss_equiv_perm_indep.pdf"
 savefig(fig, fig_name)
 println("Created $(fig_name)")
 
+# p-values
+n_tests = length(test_labs)
+figsi = Matrix{Any}(undef, n_s, n_tests)
+figsr = Matrix{Any}(undef, n_s, n_tests)
+@views @inbounds @threads for i in 1:n_s
+    pvals = CSV.read(dir_out*"gauss_perm_S3_N1000_B100_n250_s$(ss[i]).csv", DataFrame)
+    for j in 1:n_tests
+        last_row = j==n_tests
+        title = j==1 ? L"s=%$(ss[i])" : ""
+        ylab = i==1 ? test_labs[j] : ""
+        figsi[i,j] = hist(pvals, all_tests_i[j], ylab, title=title, last_row=last_row)
+        figsr[i,j] = hist(pvals, all_tests_r[j], ylab, title=title, last_row=last_row)
+    end
+end
 
-# SWARM invariance p-value distributions
-# --------------------------------------
+p_title = shared_xlab("Independent comparison sets", bottom_margin=-3mm)
+p_xlab = shared_xlab(L"$p$-value", top_margin=-1mm)
+p_ylab = shared_ylab("Frequency", right_margin=6mm)
+l = @layout [c{0.0001w} [c{0.03h} ; grid(n_tests,n_s) ; b{0.03h}]]
+figi = plot(p_ylab, p_title, figsi..., p_xlab, layout=l, size=(450,300))
+figi_name = dir_plt * "pval_gauss_equiv_perm_indep.pdf"
+savefig(figi, figi_name)
+ep = shared_xlab("")
+
+p_title = shared_xlab("Reused comparison set", bottom_margin=-3mm)
+p_xlab = shared_xlab(L"$p$-value", top_margin=-1mm)
+p_ylab = shared_ylab("Frequency", right_margin=6mm)
+l = @layout [c{0.0001w} [c{0.03h} ; grid(n_tests,n_s) ; b{0.03h}]]
+figr = plot(p_ylab, p_title, figsr..., p_xlab, layout=l, size=(450,300))
+figr_name = dir_plt * "pval_gauss_equiv_perm_reuse.pdf"
+savefig(figr, figr_name)
+# println("Created $(figi_name) and $(figr_name)")
+
+
+# Gaussian equivariance resamples experiments
+# -------------------------------------------
+
+println("Creating equivariance resamples plots")
+
+# Set up experiment parameters
+ps = GV_GAUSS_RES_p
+n_p = length(ps)
+
+ns = GV_GAUSS_RES_n
+n_n = length(ns)
+
+Bs = GV_GAUSS_RES_B
+n_B = length(Bs)
+
+p0_lims = (0, 0.05)
+p099_lims = (0, 1)
 
 # Read experiment results
-pv_swarm_inv = CSV.read(dir_out*"SWARM_invariance_N1000_n220_B200.csv", DataFrame)
-pv_swarm_jinv = CSV.read(dir_out*"SWARM_joint_invariance_N1000_n220_B200.csv", DataFrame)
-
-# Set seed for reproducibility
-Random.seed!(1)
-
-# Make plot
-pd_2S = hist(GV_2S, pv_swarm_inv[!,:inv_disc_2SMMD_p], "2SMMD", title="Marg. + Disc.")
-pd_MMD = hist(GV_MMD, pv_swarm_inv[!,:inv_disc_MMD_p], "MMD")
-pd_NMMD = hist(GV_NMMD, pv_swarm_inv[!,:inv_disc_NMMD_p], "NMMD")
-pd_CW = hist(GV_CW, pv_swarm_inv[!,:inv_disc_CW_p], "CW", last_row=true, p_col=:grey15)
-
-pc_2S = hist(GV_2S, pv_swarm_inv[!,:inv_cont_2SMMD_p], title="Marg. + Cont.")
-pc_MMD = hist(GV_MMD, pv_swarm_inv[!,:inv_cont_MMD_p])
-pc_NMMD = hist(GV_NMMD, pv_swarm_inv[!,:inv_cont_NMMD_p])
-pc_CW = hist(GV_CW, pv_swarm_inv[!,:inv_cont_CW_p], last_row=true, p_col=:grey15)
-
-pjd_2S = hist(GV_2S, pv_swarm_jinv[!,:jinv_disc_2SMMD_p], title="Joint + Disc.", p_col=:grey15, p_y=140)
-pjd_MMD = hist(GV_MMD, pv_swarm_jinv[!,:jinv_disc_MMD_p], p_col=:grey15)
-pjd_NMMD = hist(GV_NMMD, pv_swarm_jinv[!,:jinv_disc_NMMD_p], p_col=:grey15, p_y=147)
-pjd_CW = hist(GV_CW, pv_swarm_jinv[!,:jinv_disc_CW_p], last_row=true, p_col=:grey15)
-
-pjc_2S = hist(GV_2S, pv_swarm_jinv[!,:jinv_cont_2SMMD_p], title="Joint + Cont.", p_col=:grey15, p_y=147)
-pjc_MMD = hist(GV_MMD, pv_swarm_jinv[!,:jinv_cont_MMD_p], p_col=:grey15)
-pjc_NMMD = hist(GV_NMMD, pv_swarm_jinv[!,:jinv_cont_NMMD_p], p_col=:grey15, p_y=141)
-pjc_CW = hist(GV_CW, pv_swarm_jinv[!,:jinv_cont_CW_p], last_row=true, p_col=:grey15)
-
-l = @layout [grid(4,4) ; a{0.02h}]
-fig = plot(pd_2S, pc_2S, pjd_2S, pjc_2S,
-           pd_MMD, pc_MMD, pjd_MMD, pjc_MMD,
-           pd_NMMD, pc_NMMD, pjd_NMMD, pjc_NMMD,
-           pd_CW, pc_CW, pjd_CW, pjc_CW,
-           xlab_pv, layout=l, size=(450,420), left_margin=1mm)
-fig_name = dir_plt * "SWARM_invariance_pvals.pdf"
-savefig(fig, fig_name)
-println("Created $(fig_name)")
-
-
-# LHC p-value distributions
-# -------------------------
-
-# Read experiment results
-pv_lhc_inv = CSV.read(dir_out*"LHC_invariance_N1000_n100_M2_B200.csv", DataFrame)
-pv_lhc_eq = CSV.read(dir_out*"LHC_equivariance_N1000_n100_B200.csv", DataFrame)
-
-# Set seed for reproducibility
-Random.seed!(1)
+n_tests = length(all_tests)
+means = Array{Float64}(undef, n_tests, n_B, n_n, n_p)
+sds = Array{Float64}(undef, n_tests, n_B, n_n, n_p)
+@views @inbounds @threads for i in 1:n_p
+    for j in 1:n_n
+        for k in 1:n_B
+            p = ps[i]
+            n = ns[j]
+            B = Bs[k]
+            pvals = CSV.read(dir_out*"gauss_resamples_SO3_N1000_n$(n)_p$(p)_B$(B).csv", DataFrame)
+            compute_rej_rate(pvals, all_tests, means[:,k,j,i], sds[:,k,j,i])
+        end
+    end
+end
 
 # Make plots
-pH0_2S = hist(GV_2S, pv_lhc_inv[!,:H0_2SMMD_p], "2SMMD", title=L"\mathbf{G}_0")
-pH0_MMD = hist(GV_MMD, pv_lhc_inv[!,:H0_MMD_p], "MMD")
-pH0_NMMD = hist(GV_NMMD, pv_lhc_inv[!,:H0_NMMD_p], "NMMD")
-pH0_CW = hist(GV_CW, pv_lhc_inv[!,:H0_CW_p], "CW", last_row=true, p_col=:grey15)
+figsi = Matrix{Any}(undef, n_n, n_p)
+figsr = Matrix{Any}(undef, n_n, n_p)
+@views @inbounds for i in 1:n_p
+    for j in 1:n_n
+        title = i==1 ? L"$n=%$(ns[j])$" : ""
+        ylab = j==1 ? L"$p=%$(ps[i])$" : ""
+        pl_yticks = j==1
+        ylims = i==1 ? p0_lims : p099_lims
+        pl_xticks = i==2
+        figsi[j,i] = plot_rej_rate(means[:,:,j,i], sds[:,:,j,i], all_tests_i, Bs, ylims=ylims,
+                                   ylab=ylab, title=title, pl_xticks=pl_xticks, pl_yticks=pl_yticks, xrotation=30)
+        figsr[j,i] = plot_rej_rate(means[:,:,j,i], sds[:,:,j,i], all_tests_r, Bs, ylims=ylims,
+                                   ylab=ylab, title=title, pl_xticks=pl_xticks, pl_yticks=pl_yticks, xrotation=30)
+    end
+end
 
-pH1_ind_2S = hist(GV_2S, pv_lhc_inv[!,:H1_ind_2SMMD_p], title=L"\mathbf{G}_1", p_col=:grey15)
-pH1_ind_MMD = hist(GV_MMD, pv_lhc_inv[!,:H1_ind_MMD_p], p_col=:grey15)
-pH1_ind_NMMD = hist(GV_NMMD, pv_lhc_inv[!,:H1_ind_NMMD_p], p_col=:grey15)
-pH1_ind_CW = hist(GV_CW, pv_lhc_inv[!,:H1_ind_CW_p], last_row=true, p_col=:grey15)
+p_xlab = shared_xlab(L"B", top_margin=1mm)
+p_title = shared_xlab("Independent comparison sets", top_margin=1mm, bottom_margin=-3mm)
+p_ylab = shared_ylab("Reject rate", right_margin=4.5mm)
+l = @layout [c{0.0001w} [a{0.05h} ; d{0.01h} ; grid(n_p,n_n) ; b{0.05h}]]
+figi = plot(p_ylab, leg, p_title,
+                   figsi...,
+                   p_xlab, layout=l, size=(600,275))
+figi_name = dir_plt * "gauss_equiv_resamples_indep.pdf"
+savefig(figi, figi_name)
 
-pH1_so4_2S = hist(GV_2S, pv_lhc_inv[!,:H1_SO4_2SMMD_p], title=L"\mathbf{G}_2", p_col=:grey15)
-pH1_so4_MMD = hist(GV_MMD, pv_lhc_inv[!,:H1_SO4_MMD_p], p_col=:grey15)
-pH1_so4_NMMD = hist(GV_NMMD, pv_lhc_inv[!,:H1_SO4_NMMD_p], p_col=:grey15)
-pH1_so4_CW = hist(GV_CW, pv_lhc_inv[!,:H1_SO4_CW_p], last_row=true, p_col=:grey15)
+p_xlab = shared_xlab(L"B", top_margin=1mm)
+p_title = shared_xlab("Reused comparison set", top_margin=1mm, bottom_margin=-3mm)
+p_ylab = shared_ylab("Reject rate", right_margin=4.5mm)
+l = @layout [c{0.0001w} [a{0.05h} ; d{0.01h} ; grid(n_p,n_n) ; b{0.05h}]]
+figr = plot(p_ylab, leg, p_title,
+                   figsr...,
+                   p_xlab, layout=l, size=(600,275))
+figr_name = dir_plt * "gauss_equiv_resamples_reuse.pdf"
+savefig(figr, figr_name)
+println("Created $(figi_name) and $(figr_name)")
 
-pH0_KCI = hist(GV_KCI, pv_lhc_eq[!,:H0_KCI_p], "KCI", title=L"SO$(2)$-equiv.", p_col=:grey15)
-pH0_CP = hist(GV_CP, pv_lhc_eq[!,:H0_CP_p], "CP", last_row=true)
 
-pH1_KCI = hist(GV_KCI, pv_lhc_eq[!,:H1_KCI_p], title=L"Cond. SO$(2)$-inv.", p_col=:grey15)
-pH1_CP = hist(GV_CP, pv_lhc_eq[!,:H1_CP_p], last_row=true, p_col=:grey15)
+# Gaussian equivariance sensitivity experiments
+# ---------------------------------------------
 
-l = @layout [[grid(4,3) ; b{0.05h}] c{0.001w} [a{0.64w,0.46h} ; grid(2,2) ; d{0.05h}]]
-fig = plot(pH0_2S, pH1_ind_2S, pH1_so4_2S,
-           pH0_MMD, pH1_ind_MMD, pH1_so4_MMD,
-           pH0_NMMD, pH1_ind_NMMD, pH1_so4_NMMD,
-           pH0_CW, pH1_ind_CW, pH1_so4_CW,
-           xlab_pv, ep, ep,
-           pH0_KCI, pH1_KCI,
-           pH0_CP, pH1_CP,
-           xlab_pv, layout=l, size=(750,415), left_margin=4mm)
-fig_name = dir_plt * "LHC_pvals.pdf"
+println("Creating equivariance sensitivity plots")
+
+# Set up experiment parameters
+ps = GV_GAUSS_SEN_p
+n_p = length(ps)
+
+ss = GV_GAUSS_SEN_s
+n_s = length(ss)
+
+ns = GV_GAUSS_SEN_n
+n_n = length(ns)
+
+# Read experiment results
+n_tests = length(all_tests)
+means = Array{Float64}(undef, n_tests, n_n, n_s, n_p)
+sds = Array{Float64}(undef, n_tests, n_n, n_s, n_p)
+@views @inbounds @threads for i in 1:n_p
+    for j in 1:n_s
+        for k in 1:n_n
+            pvals = CSV.read(dir_out*"gauss_sens_SO3_N1000_B100_p$(ps[i])_s$(ss[j])_n$(ns[k]).csv", DataFrame)
+            compute_rej_rate(pvals, all_tests, means[:,k,j,i], sds[:,k,j,i])
+        end
+    end
+end
+
+# Make plots
+figsi = Matrix{Any}(undef, n_s, n_p)
+figsr = Matrix{Any}(undef, n_s, n_p)
+@views @inbounds for i in 1:n_p
+    for j in 1:n_s
+        title = i==1 ? L"$s=%$(ss[j])$" : ""
+        ylab = j==1 ? L"$p=%$(round(ps[i]/(2*π),digits=3))$" : ""
+        pl_yticks = j==1
+        pl_xticks = i==4
+        figsi[j,i] = plot_rej_rate(means[:,:,j,i], sds[:,:,j,i], all_tests_i, ns,
+                                   ylab=ylab, title=title, pl_xticks=pl_xticks, pl_yticks=pl_yticks)
+        figsr[j,i] = plot_rej_rate(means[:,:,j,i], sds[:,:,j,i], all_tests_r, ns,
+                                   ylab=ylab, title=title, pl_xticks=pl_xticks, pl_yticks=pl_yticks)
+    end
+end
+
+p_xlab = shared_xlab(L"B", top_margin=1mm)
+p_ylab = shared_ylab("Reject rate", right_margin=4.5mm)
+l = @layout [c{0.0001w} [a{0.01h} ; grid(n_p,n_s) ; b{0.05h}]]
+figi = plot(p_ylab, leg,
+                   figsi...,
+                   p_xlab, layout=l, size=(600,425))
+figi_name = dir_plt * "gauss_equiv_sensitivity_indep.pdf"
+savefig(figi, figi_name)
+
+p_xlab = shared_xlab(L"B", top_margin=1mm)
+p_ylab = shared_ylab("Reject rate", right_margin=4.5mm)
+l = @layout [c{0.0001w} [a{0.01h} ; grid(n_p,n_s) ; b{0.05h}]]
+figr = plot(p_ylab, leg,
+                   figsr...,
+                   p_xlab, layout=l, size=(600,425))
+figr_name = dir_plt * "gauss_equiv_sensitivity_reuse.pdf"
+savefig(figr, figr_name)
+println("Created $(figi_name) and $(figr_name)")
+
+# p-values
+n_s = length(ss)
+n_tests = length(test_labs)
+figsi = Matrix{Any}(undef, n_s, n_tests)
+figsr = Matrix{Any}(undef, n_s, n_tests)
+@views @inbounds @threads for i in 1:n_s
+    pvals = CSV.read(dir_out*"gauss_sens_SO3_N1000_B100_p3.142_s$(ss[i])_n250.csv", DataFrame)
+    for j in 1:n_tests
+        last_row = j==n_tests
+        title = j==1 ? L"s=%$(ss[i])" : ""
+        ylab = i==1 ? test_labs[j] : ""
+        figsi[i,j] = hist(pvals, all_tests_i[j], ylab, title=title, last_row=last_row)
+        figsr[i,j] = hist(pvals, all_tests_r[j], ylab, title=title, last_row=last_row)
+    end
+end
+
+p_title = shared_xlab("Independent comparison sets", bottom_margin=-3mm)
+p_xlab = shared_xlab(L"$p$-value", top_margin=-1mm)
+p_ylab = shared_ylab("Frequency", right_margin=6mm)
+l = @layout [c{0.0001w} [c{0.03h} ; grid(n_tests,n_s) ; b{0.03h}]]
+figi = plot(p_ylab, p_title, figsi..., p_xlab, layout=l, size=(450,300))
+figi_name = dir_plt * "pval_gauss_equiv_sensitivity_indep.pdf"
+savefig(figi, figi_name)
+
+p_title = shared_xlab("Reused comparison set", bottom_margin=-3mm)
+p_xlab = shared_xlab(L"$p$-value", top_margin=-1mm)
+p_ylab = shared_ylab("Frequency", right_margin=6mm)
+l = @layout [c{0.0001w} [c{0.03h} ; grid(n_tests,n_s) ; b{0.03h}]]
+figr = plot(p_ylab, p_title, figsr..., p_xlab, layout=l, size=(450,300))
+figr_name = dir_plt * "pval_gauss_equiv_sensitivity_reuse.pdf"
+savefig(figr, figr_name)
+println("Created $(figi_name) and $(figr_name)")
+
+
+# MNIST experiment
+# ----------------
+
+println("Creating MNIST plots")
+
+# Read experiment results
+str_9 = ["w9", "wo9"]
+str_aug = ["naug", "aug"]
+
+# Make plots
+x = 0:3:30
+
+# Plot unaugmented results
+ps = Matrix{Any}(undef, 2, 2)
+@inbounds @views for i in 1:length(str_9)
+    for j in 1:length(str_aug)
+        nine = str_9[i]
+        aug = str_aug[j]
+        df = CSV.read(dir_out*"MNIST_N1000_n100_B100_" * aug * "_" * nine * ".csv", DataFrame)
+        n = size(df, 1)
+        
+        legend = i==1 && j==2 ? :topright : false
+        ylab = j==1 ? (i==1 ? "9 included" : "9 excluded") : ""
+        title = i==1 ? (j==1 ? "Without DA" : "With DA") : ""
+        
+        mn = mean.(eachcol(df[:,Regex("reuse_.*_FUSE_p\$")] .< α))
+        ps[j,i] = plot(x, mn, linecolor=colsDict[GV_FUSE], linealpha=0.7, ylab=ylab, title=title, label="R-"*GV_FUSE,
+                       xlims=(minimum(x),maximum(x)), ylims=(0,1), grid=true, legend=legend)
+        sd = sqrt.(mn .* (1 .- mn) / n)
+        plot!(x, max.(0,mn.-sd), fillrange=min.(1,mn.+sd), label=:none, fillalpha=0.2, linealpha=0, fillcolor=colsDict[GV_FUSE])
+        
+        mn = mean.(eachcol(df[:,Regex("indep_.*_FUSE_p\$")] .< α))
+        plot!(x, mn, linecolor=colsDict[GV_FUSE], linealpha=0.7, linestyle=:dot, label="I-"*GV_FUSE)
+        sd = sqrt.(mn .* (1 .- mn) / n)
+        plot!(x, max.(0,mn.-sd), fillrange=min.(1,mn.+sd), label=:none, fillalpha=0.2, linealpha=0, fillcolor=colsDict[GV_FUSE])
+
+        mn = mean.(eachcol(df[:,Regex("reuse_.*_SK_p\$")] .< α))
+        plot!(x, mn, linecolor=colsDict[GV_SK], linealpha=0.7, label="R-"*GV_SK)
+        sd = sqrt.(mn .* (1 .- mn) / n)
+        plot!(x, max.(0,mn.-sd), fillrange=min.(1,mn.+sd), label=:none, fillalpha=0.2, linealpha=0, fillcolor=colsDict[GV_SK])
+        
+        mn = mean.(eachcol(df[:,Regex("indep_.*_SK_p\$")] .< α))
+        plot!(x, mn, linecolor=colsDict[GV_SK], linealpha=0.7, linestyle=:dot, label="I-"*GV_SK)
+        sd = sqrt.(mn .* (1 .- mn) / n)
+        plot!(x, max.(0,mn.-sd), fillrange=min.(1,mn.+sd), label=:none, fillalpha=0.2, linealpha=0, fillcolor=colsDict[GV_SK])
+        
+        if i==1
+            plot!(xticks = (xticks(ps[j,i])[1][1],""))
+        end
+        if j==2
+            plot!(yticks = (yticks(ps[j,i])[1][1],""))
+        end
+    end
+end
+p_xlab = shared_xlab("Epoch", top_margin=-1mm)
+p_ylab = shared_ylab("Reject rate", right_margin=1mm)
+l = @layout [c{0.0001w} grid(2,2) ; e{0.0001w,0.01h} b{0.01h}]
+fig = plot(p_ylab, ps...,
+           ep, p_xlab, layout=l, size=(350,250))
+fig_name = dir_plt * "MNIST.pdf"
 savefig(fig, fig_name)
 println("Created $(fig_name)")
 
 
-# LHC invariance experiment: increasing number of random projections
-# ------------------------------------------------------------------
+# Invariance experiment
+# ---------------------
+
+println("Creating invariance plots")
+
+# Set up experiment parameters
+ps = GV_INV_p
+n_p = length(ps)
+title_labs = [L"p=\pi/2",L"p=\pi",L"p=3\pi/4",L"p=2\pi"]
+
+ns = GV_INV_n
+n_n = length(ns)
 
 # Read experiment results
-df = CSV.read(dir_out*"LHC_invariance_N1000_n100_M2_B200_Jvar.csv", DataFrame)
+n_tests = length(all_tests)
+means = Array{Float64}(undef, n_tests, n_n, n_p)
+sds = Array{Float64}(undef, n_tests, n_n, n_p)
+@views @inbounds @threads for i in 1:n_p
+    for j in 1:n_n
+        pvals = CSV.read(dir_out*"invariance_N1000_n$(ns[j])_p$(ps[i])_B100.csv", DataFrame)
+        compute_rej_rate(pvals, all_tests, means[:,j,i], sds[:,j,i])
+    end
+end
 
-# Make plot
-Js = collect(2:2:20)
+# Make plots
+figs = Vector{Any}(undef, n_p)
+@views @inbounds for i in 1:n_p
+    yticks = i==1
+    figs[i] = plot_rej_rate(means[:,:,i], sds[:,:,i], all_tests, ns, title=title_labs[i], pl_xticks=true, pl_yticks=yticks)
+end
+p_xlab = shared_xlab(L"n", top_margin=2mm)
+p_ylab = shared_ylab("Reject rate", right_margin=4.5mm)
+l = @layout [c{0.0001w} [a{0.1h} ; grid(1,n_p) ; b{0.05h}]]
+fig = plot(p_ylab, leg, figs..., p_xlab, layout=l, size=(600,200))
+fig_name = dir_plt * "invariance.pdf"
+savefig(fig, fig_name)
+println("Created $(fig_name)")
 
-fig_J0 = plot_rej(df, Js, "H0.*", ylims=[0,0.1], ylab="Rej. rate", pl_yticks=true)
-fig_J1_ind = plot_rej(df, Js, "H1_ind.*", ylims=[0,1], pl_yticks=true)
-fig_J1_SO4 = plot_rej(df, Js, "H1_SO4.*", ylims=[0,1], pl_yticks=true)
-
-fig_Jt_0 = plot_time(df, Js, "H0.*", xlab="Rand. projections", ylab="Avg. time (s)", pl_xticks=true, pl_yticks=true)
-fig_Jt_ind = plot_time(df, Js, "H1_ind.*", xlab="Rand. projections", pl_xticks=true, pl_yticks=true)
-fig_Jt_SO4 = plot_time(df, Js, "H1_SO4.*", xlab="Rand. projections", pl_xticks=true, pl_yticks=true)
-
-legend = plot([0 0], legend=true, showaxis=false, label=reshape(df[:,"Test"],1,2), legendcolumns=2,
-              foreground_color_legend=nothing, color=[colsDict[GV_NMMD] colsDict[GV_CW]])
-l = @layout[grid(2,3) ; a{0.01h}]
-fig = plot(fig_J0, fig_J1_ind, fig_J1_SO4,
-           fig_Jt_0, fig_Jt_ind, fig_Jt_SO4,
-           legend, layout=l, title=[L"\mathbf{G}_0" L"\mathbf{G}_1" L"\mathbf{G}_2" "" "" "" ""], top_margin=1mm, size=(525,300))
-fig_name = dir_plt * "LHC.pdf"
+# p-values
+n_tests = length(test_labs)
+figs = Matrix{Any}(undef, n_p, n_tests)
+@views @inbounds @threads for i in 1:n_p
+    pvals = CSV.read(dir_out*"invariance_N1000_n100_p$(ps[i])_B100.csv", DataFrame)
+    for j in 1:n_tests
+        last_row = j==n_tests
+        title = j==1 ? title_labs[i] : ""
+        ylab = i==1 ? test_labs[j] : ""
+        figs[i,j] = hist(pvals, test_labs[j], ylab, title=title, last_row=last_row)
+    end
+end
+ep = shared_xlab("")
+p_xlab = shared_xlab(L"$p$-value", top_margin=0mm)
+p_ylab = shared_ylab("Frequency", right_margin=6mm)
+l = @layout [c{0.0001w} [c{0.03h} ; grid(n_tests,n_p) ; b{0.03h}]]
+fig = plot(p_ylab, ep, figs..., p_xlab, layout=l, size=(450,350))
+fig_name = dir_plt * "pval_invariance.pdf"
 savefig(fig, fig_name)
 println("Created $(fig_name)")
 
 
-# Top quark conditional invariance p-value distributions
-# ------------------------------------------------------
+# LHC data
+# --------
 
-# Read experiment results
-pv_tqt = CSV.read(dir_out*"TQT_conditional_invariance_N1000_n100_B200.csv", DataFrame)
+Random.seed!(seed)
 
-# Make plot
-pH0_KCI = hist(GV_KCI, pv_tqt[!,:H0_KCI_p], "KCI", title=L"H_0", KS=false)
-pH1_KCI = hist(GV_KCI, pv_tqt[!,:H1_KCI_p], title=L"H_1", KS=false)
+# Read in data
+fid = h5open(dir_out_dat * "LHC.h5", "r")
+LHC = copy(read(fid["data"]))
+close(fid)
+n_LHC = size(LHC, 2)
 
-l = @layout [grid(1,2) ; a{0.05h}]
-fig = plot(pH0_KCI, pH1_KCI,
-           xlab_pv, layout=l, size=(240,140))
-fig_name = dir_plt * "TQT_pvals.pdf"
+# Sample data
+n = 500
+inds = sample(1:n_LHC, n, replace=false)
+x = LHC[[1,2,3,4], inds]
+
+# Plot the data
+m = maximum(abs.(x)) + 100
+lims = (-m,m)
+p = @views scatter(x[1,:],x[2,:], markersize=3, markerstrokewidth=0, markeralpha=0.5, lims=lims, xlab=L"p_1", markercolor="darkorange2",
+                   label="1st LC", title="Leading Constituent momenta", titlefontsize=9)
+@views scatter!(x[3,:],x[4,:], markersize=3, markerstrokewidth=0, markeralpha=0.4, ylab=L"p_2", label="2nd LC", markercolor=1)
+fig = plot(p, size=(250,250), dpi=300, legend=true)
+fig_name = dir_plt * "LHC_data.pdf"
 savefig(fig, fig_name)
 println("Created $(fig_name)")

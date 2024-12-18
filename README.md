@@ -1,6 +1,8 @@
-# Hypothesis Tests for Distributional Symmetry
+#### This repository is currently WIP
 
-This repository contains the code used to generate the experiment results in [Non-parametric Hypothesis Tests for Distributional Group Symmetry](https://arxiv.org/abs/2307.15834).
+# Randomization Tests for Conditional Group Symmetry
+
+This repository contains the code used to generate the experiment results discussed in the article Randomization Tests for Conditional Group Symmetry, which supersedes the article [Non-parametric Hypothesis Tests for Distributional Group Symmetry](https://arxiv.org/abs/2307.15834). The repository for the previous article can be found [here](https://github.com/chiukenny/Tests-for-Distributional-Symmetry).
 
 * To reproduce the experiment results, execute the command `julia --threads 1 run_experiments.jl`.
 * To generate the plots in the manuscript, execute the command `julia make_plots.jl`.
