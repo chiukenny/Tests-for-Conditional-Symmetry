@@ -1,5 +1,4 @@
-## Resampling methods for tests that require resampling/bootstrapping
-
+## Implementations of randomization methods
 
 using Base.Threads
 using Random
@@ -18,7 +17,7 @@ abstract type AbstractResampler end
 # Overload this as necessary
 function initialize(RS::AbstractResampler, data::Data) end
 
-# Estimates the p-value given the test statistic
+# Estimates the p-value given the computed test statistic and a randomization method
 function estimate_pvalue(test::AbstractTest, test_stat::Float64, same_ref::Bool)
     RS = get_resampler(test)
     B = RS.B
@@ -38,7 +37,7 @@ mutable struct Permuter <: AbstractResampler
     B::UInt16     # Number of resamples
     paired::Bool  # Paired samples?
     # Internal use
-    data::Data  # Stored data
+    data::Data    # Stored data
     function Permuter(B::Integer, paired::Bool=false, data::Data=Data(0))
         return new(B, paired, data)
     end
@@ -74,8 +73,8 @@ end
 # -----------------------------------------------
 
 mutable struct HaarTransformer <: AbstractResampler
-    B::UInt16  # Number of resamples
-    G::Group   # Group
+    B::UInt16   # Number of resamples
+    G::Group    # Group
     # Internal use
     data::Data  # Stored data
     function HaarTransformer(B::Integer, G::Group, data::Data=Data(0))
@@ -98,9 +97,9 @@ end
 # -------------------------------------------------------
 
 mutable struct EquivariantResampler <: AbstractResampler
-    B::UInt16  # Number of resamples
-    G::Group   # Group
-    # Internal parameters
+    B::UInt16   # Number of resamples
+    G::Group    # Group
+    # Internal use
     data::Data  # Source data
     function EquivariantResampler(B::Integer, G::Group; data=Data(0))
         return new(B, G, data)
@@ -115,7 +114,7 @@ function initialize(RS::EquivariantResampler, data::Data)
     initialize(data, RS.G, :M)
     initialize(data, RS.G, :probs)
     
-    # Precompute the G and Y distributions
+    # Precompute the G and tY distributions
     initialize(data, RS.G, :g)
     initialize(data, RS.G, :τy)
 end
@@ -126,7 +125,7 @@ function resample(RS::EquivariantResampler)
     y = similar(data.y)
     inds = 1:data.n
     @views @inbounds @threads for i in inds
-        # Sample with probability proportional to orbit representative kernel distance
+        # Sample with probability proportional to maximal invariant kernel distance
         j = sample(inds, data.probs[i])
         y[:,i] = RS.G.f_transform_Y(data.τy[:,i] , data.g[j])
     end

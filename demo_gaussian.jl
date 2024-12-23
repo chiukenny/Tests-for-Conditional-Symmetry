@@ -2,7 +2,7 @@
 ## --------------------------------------------------
 ##
 ## From the command line, execute the following command to run this demo:
-##     julia gaussian_demo.jl
+##     julia demo_gaussian.jl
 
 
 include("src/util.jl")                             # Shared functions

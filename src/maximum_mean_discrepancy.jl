@@ -1,5 +1,6 @@
-## Implementation of MMD-based tests
-
+## Implementation of the maximum mean discrepancy test statistic for
+##     1. standard two-sample tests
+##     2. one-sample tests for invariance
 
 using Distributions
 using Base.Threads
@@ -69,7 +70,7 @@ function null_test_statistic(test::MMD2S, data::Data)
 end
 
 
-# Computes the standard two-sample MMD for a set of kernels and bandwidths
+# Computes the standard two-sample MMD for a set of kernels
 function test_statistic(test::MMD2S, data::Data, kernels::Vector{Tuple{AbstractKernel,Vector{<:Any}}})
     n1 = test.n1
     n2 = data.n - n1    
@@ -85,7 +86,7 @@ function test_statistic(test::MMD2S, data::Data, kernels::Vector{Tuple{AbstractK
         compute_distances!(x2_d, k, x[:,(n1+1):end])
         compute_distances!(x1_x2_d, k, x[:,1:n1], x[:,(n1+1):end])
         
-        # Compute MMDs for a set of bandwidths for one type of kernel
+        # Compute MMDs for a set of bandwidths for each type of kernel
         ind = (j-1) * n_k
         @threads for i in 1:n_k
             mmds[ind+i] = compute_Umean_K_1_d(ks[i],x1_d) + compute_Umean_K_1_d(ks[i],x2_d) - 2*compute_Vmean_K_d(ks[i],x1_x2_d)
@@ -174,7 +175,7 @@ function null_test_statistic(test::MMD, data::Data)
 end
 
 
-# Computes the MMD test for invariance for a set of kernels and bandwidths
+# Computes the MMD test for invariance for a set of kernels
 function test_statistic(test::MMD, data::Data, kernels::Vector{Tuple{AbstractKernel,Vector{<:Any}}})
     dat = test.test_on==:x ? data.x : data.y
     d, n = size(dat)

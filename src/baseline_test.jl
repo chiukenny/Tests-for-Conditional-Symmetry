@@ -1,5 +1,4 @@
-## Implementation of the transformation two-sample (baseline) test for invariance
-
+## Implementation of the baseline two-sample permutation test
 
 include("util.jl")
 include("groups.jl")
@@ -18,11 +17,6 @@ mutable struct Baseline <: AbstractTest
     function Baseline(name::String, test::MMD2S; RS=Permuter(B))
         return new(name, test, RS)
     end
-end
-
-# Determines which data to test on
-function get_test_on(test::Baseline)
-    return get_test_on(test.test)
 end
 
 

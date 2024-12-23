@@ -9,12 +9,8 @@
 ## Edit the 'Experiment settings' and 'Paths' variables below as necessary
 
 
-# Experiment settings
-use_raw_data = true  # Start from raw data for LHC/TQT? Only need to do so if running for the first time
-
 # Paths
 dir_src = "./src/"               # Source code directory
-dir_dat = "./data/"              # Raw data directory
 dir_exp = "./experiments/"       # Experiment directory
 dir_out = "./outputs/"           # Output directory
 dir_out_dat = "./outputs/data/"  # Cleaned data directory
@@ -25,10 +21,8 @@ dir_out_dat = "./outputs/data/"  # Cleaned data directory
 
 # For logging
 using Dates
-include(dir_src * "global_variables.jl") # Global variables
-
+include(dir_src * "global_variables.jl")  # Global variables
 println("[$(Dates.format(now(),GV_DT))] Loading packages and modules")
-
 using Base.Threads
 using StaticArrays
 using Statistics
@@ -46,24 +40,16 @@ using CSV
 using HDF5
 import H5Zblosc
 
-include(dir_src * "util.jl")                             # Shared functions
-include(dir_src * "groups.jl")                           # Groups and related functions
-include(dir_src * "test.jl")                             # Data structures and functions for tests
-include(dir_src * "kernel.jl")                           # Kernel functions
-include(dir_src * "resampler.jl")                        # Resampling functions
-include(dir_src * "maximum_mean_discrepancy.jl")         # MMD test
-include(dir_src * "baseline_test.jl")                    # Baseline test
-include(dir_src * "conditional_randomization_test.jl")   # Conditional randomization test
-include(dir_src * "aggregate_test.jl")                   # Aggregate tests
-include(dir_src * "experiment_helpers.jl")               # Experiment helper functions
-
-
-# Clean and save real data
-if use_raw_data
-    println("[$(Dates.format(now(),GV_DT))] Cleaning data")
-    include(dir_dat * "LHC_data.jl")
-    include(dir_dat * "TQT_data.jl")
-end
+include(dir_src * "util.jl")                            # Shared functions
+include(dir_src * "groups.jl")                          # Groups and related functions
+include(dir_src * "test.jl")                            # Data structures and functions for tests
+include(dir_src * "kernel.jl")                          # Kernel functions
+include(dir_src * "resampler.jl")                       # Resampling functions
+include(dir_src * "maximum_mean_discrepancy.jl")        # MMD test
+include(dir_src * "baseline_test.jl")                   # Baseline test
+include(dir_src * "conditional_randomization_test.jl")  # Conditional randomization test
+include(dir_src * "aggregate_test.jl")                  # Aggregate tests
+include(dir_src * "experiment_helpers.jl")              # Experiment helper functions
 
 
 # Read arguments

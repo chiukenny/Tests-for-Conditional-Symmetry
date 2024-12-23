@@ -1,5 +1,4 @@
-## Implementation/adaption of the aggregate MMD tests for invariance and equivariance
-
+## Implementations of the FUSE (Biggs, 2023) and supremum kernel distance (Carcamo, 2024) test statistics
 
 include("util.jl")
 include("groups.jl")
@@ -19,12 +18,6 @@ function get_test(test::AbstractAggregateTest)
 end
 
 
-# Determines which data to test on
-function get_test_on(test::AbstractAggregateTest)
-    return get_test_on(test.test)
-end
-
-
 # Retrieves the resampler
 function get_resampler(test::AbstractAggregateTest)
     return get_resampler(test.test)
@@ -32,8 +25,8 @@ end
 
 
 # Prepares kernels for use
-# Assumes kernel has a bandwidth parameter; otherwise no point in using an aggregate test
-# Product kernels are considered a single kernel; can be used as long as one of the kernels has a parameter
+#     Assumes kernel has a bandwidth parameter; otherwise no point in using an aggregate test
+#     Product kernels are considered a single kernel; can be used as long as one of the kernels has a parameter
 function prepare_kernels(test::AbstractAggregateTest, data::AbstractMatrix{Float64})
     test.ks = Vector{Tuple{AbstractKernel,Vector{<:AbstractKernel}}}(undef, length(test.kernels))
     for i in 1:length(test.kernels)
@@ -125,6 +118,7 @@ mutable struct FUSE <: AbstractAggregateTest
     end
 end
 
+# Aggregates the test statistics via FUSE
 function aggregate_MMD(test::FUSE, test_stats::AbstractVector{Float64})
     return log(sum(exp.(test.λ * test_stats))) / test.λ
 end
@@ -145,6 +139,7 @@ mutable struct SK <: AbstractAggregateTest
     end
 end
 
+# Aggregates the test statistics via SK
 function aggregate_MMD(test::SK, test_stats::AbstractVector{Float64})
     return maximum(test_stats)
 end

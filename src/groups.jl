@@ -1,7 +1,7 @@
-## Collection of group implementations that are tested in the experiments
+## Implementations of groups that are tested in the experiments
 ##
 ## The following group functions may need to be implemented depending on the test:
-##     - f_sample
+##     - f_sample  (test for invariance only)
 ##         Inputs: none
 ##         Output: action g
 ##     - f_transform(_Y)
@@ -29,13 +29,13 @@ include("./util.jl")
 
 
 struct Group
-    f_sample::Function             # Samples a random group action
-    f_transform::Function          # Transforms a data point by an action
-    f_inv_transform::Function      # Transforms a data point by the inverse of an action
-    f_transform_Y::Function        # Transforms the Y component of a data point by an action
-    f_inv_transform_Y::Function    # Transforms the Y component of a data point by the inverse of an action
-    f_max_inv::Function            # Applies a maximal invariant to all data points
-    f_rep_inv::Function            # Computes the representative inversion
+    f_sample::Function           # Samples a random group action
+    f_transform::Function        # Transforms a data point by an action
+    f_inv_transform::Function    # Transforms a data point by the inverse of an action
+    f_transform_Y::Function      # Transforms the Y component of a data point by an action
+    f_inv_transform_Y::Function  # Transforms the Y component of a data point by the inverse of an action
+    f_max_inv::Function          # Applies a maximal invariant to all data points
+    f_rep_inv::Function          # Computes the representative inversion
     function Group(;f_sample=f_nothing, f_transform=f_nothing, f_inv_transform=f_nothing, f_transform_Y=f_nothing,
                     f_inv_transform_Y=f_nothing, f_max_inv=f_nothing, f_rep_inv=f_nothing)
         return new(f_sample, f_transform, f_inv_transform, f_transform_Y, f_inv_transform_Y, f_max_inv, f_rep_inv)
@@ -51,7 +51,7 @@ function transform_all(G::Group, x::AbstractMatrix{Float64}, g::Any=nothing; f_t
 end
 
 
-# Transforms each data point in a dataset given a set of predetermined transformations
+# Transforms each data point in a dataset given a set of transformations
 function transform_each(G::Group, x::AbstractMatrix{Float64}, g::AbstractVector{<:Any}; f_transform=f_nothing)
     n = size(x, 2)
     transform = f_transform==f_nothing ? G.f_transform : f_transform
@@ -63,8 +63,8 @@ function transform_each(G::Group, x::AbstractMatrix{Float64}, g::AbstractVector{
 end
 
 
-# Identity group
-# --------------
+# Trivial group
+# -------------
 
 # f_sample
 function rand_identity()
@@ -178,6 +178,7 @@ function rotate_θ1_θ2(x::AbstractVector{Float64}, θs::StaticVector{2,Float64}
     return R * x
 end
 # f_max_inv
+# Computes the orbit rep [norm(x) 0 . .] (or [norm(x1) 0 norm(x2) 0] if unpaired)
 function max_inv_θ1_θ2(x::AbstractMatrix{Float64}, paired::Bool=true)
     n = size(x, 2)
     max_x = Matrix{Float64}(undef, 4, n)
@@ -211,8 +212,8 @@ function rep_inv_θ1_θ2(x::AbstractVector{Float64}, paired::Bool=true)
 end
 
 
-# Exchangeability
-# ---------------
+# Permutation
+# -----------
 
 # f_sample: randperm(Int)
 # f_transform
@@ -231,28 +232,6 @@ end
 # Computes the permutation that takes [x_(1) ... x_(d)] -> x
 function rep_inv_permute(x::AbstractVector{Float64})
     return invperm(sortperm(x))
-end
-
-
-# Translations
-# ------------
-
-# f_sample: not implemented
-# f_transform
-function translate(x::AbstractVector{Float64}, s::Vector{Float64})
-    return x + s
-end
-# f_inv_transform
-function inv_translate(x::AbstractVector{Float64}, s::Vector{Float64})
-    return x - s
-end
-# f_max_inv
-function max_inv_translate(x::AbstractMatrix{Float64})
-    return zeros(size(x))
-end
-# f_rep_inv
-function rep_inv_translate(x::AbstractVector{Float64})
-    return x
 end
 
 

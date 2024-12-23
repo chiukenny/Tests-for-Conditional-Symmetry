@@ -24,4 +24,5 @@ docs/site/
 Manifest.toml
 
 # Outputs
-.csv
+outputs/*.csv
+outputs/*.txt

@@ -1,6 +1,10 @@
-## Collection of kernel implementations that are used in the experiments
+## Implementations of kernel functions and related methods
 ##
-## The following kernel functions need to be implemented for each kernel:
+## A kernel struct is required to have the following parameter:
+##     - f_dist: a function f(x,y) for computing the canonical distance between x and y
+##               e.g., Euclidean norm for Gaussian kernel
+##
+## The following functions need to be implemented for each kernel:
 ##     - kernel
 ##         Inputs: kernel k, matrix x, matrix y OR kernel k, distance matrix d(x,y)
 ##         Output: kernel matrix k(x,y)
@@ -18,7 +22,6 @@ abstract type AbstractKernel end
 abstract type AbstractProductKernel <: AbstractKernel end
 
 # Overload these functions as necessary
-# function initialize(k::AbstractKernel, param::Any) return end  # Called at the start of a test
 function set_param(k::AbstractKernel, param::Any) return end   # Sets the parameter of a kernel
 
 
@@ -43,7 +46,7 @@ function kernel_mat(k::AbstractKernel, x::AbstractMatrix{Float64}, y::AbstractMa
     end
     return K
 end
-# Compute the kernel matrix K(x,y) given distances d(x,y)
+# Computes the kernel matrix K(x,y) given distances d(x,y)
 function kernel_mat_d(k::AbstractKernel, dists::AbstractMatrix{<:Any})
     n1, n2 = size(dists)
     K = similar(dists, Float64)
@@ -54,7 +57,7 @@ function kernel_mat_d(k::AbstractKernel, dists::AbstractMatrix{<:Any})
 end
 
 
-# Compute the distances within a set of observations
+# Computes the distances d(x,x) within a set of observations
 function compute_distances(k::AbstractKernel, x::AbstractMatrix{Float64})
     n = size(x, 2)
     dists = Matrix{Any}(undef, n, n)
@@ -71,7 +74,7 @@ function compute_distances!(dists::Matrix{Any}, k::AbstractKernel, x::AbstractMa
         dists[i,j] = i==j ? dists[1,1] : dists[j,i]=k.f_dist(x[:,i],x[:,j])
     end
 end
-# Compute the distances between two sets of observations
+# Computes the distances d(x,y) between two sets of observations
 function compute_distances(k::AbstractKernel, x1::AbstractMatrix{Float64}, x2::AbstractMatrix{Float64})
     n1 = size(x1, 2)
     n2 = size(x2, 2)
@@ -92,8 +95,7 @@ function compute_distances!(dists::Matrix{Any}, k::AbstractKernel, x1::AbstractM
 end
 
 
-# Compute unbiased mean kernel distance
-# Assumes n1 = n2
+# Computes the unbiased mean kernel distance given points or distances (assumes n1 = n2)
 function compute_Umean_K_1_x(k::AbstractKernel, x::AbstractMatrix{Float64})
     n = size(x, 2)
     mmd = 0
@@ -158,7 +160,7 @@ function compute_Umean_K_1_2d(kx::AbstractKernel, xd::AbstractMatrix{<:Any}, ky:
 end
 
 
-# Compute (potentially) biased mean kernel distance
+# Computes the (potentially) biased mean kernel distance given points or distances
 function compute_Vmean_K_x(k::AbstractKernel, x1::AbstractMatrix{Float64}, x2::AbstractMatrix{Float64})
     n1 = size(x1, 2)
     n2 = size(x2, 2)
@@ -200,7 +202,7 @@ function compute_Vmean_K_2d(kx::AbstractKernel, xd::AbstractMatrix{<:Any}, ky::A
 end
 
 
-# Compute uniform bandwidths over discretized interval
+# Computes uniform bandwidths over a discretized interval
 function compute_uniform_bandwidths(k::AbstractKernel, x::AbstractMatrix{Float64}, n_k::Integer)
     f_dist = isa(k,AbstractProductKernel) ? (x1,x2)->k.f_dist(x1,x2)[1] : k.f_dist
     n = size(x, 2)
@@ -218,8 +220,8 @@ function compute_uniform_bandwidths(k::AbstractKernel, x::AbstractMatrix{Float64
 end
 
 
-# Implemented kernels
-# -------------------
+# Kernels
+# -------
 
 # Gaussian kernel
 mutable struct GaussianKernel <: AbstractKernel
@@ -259,63 +261,7 @@ function kernel(k::LaplaceKernel, dist::Float64)
 end
 
 
-# Indicator (0-1) kernel
-# https://upcommons.upc.edu/bitstream/handle/2099.1/17172/MarcoVillegas.pdf
-mutable struct IndicatorKernel <: AbstractKernel
-    f_dist::Function
-    function IndicatorKernel(;f_dist=equals)
-        return new(f_dist)
-    end
-end
-function kernel(k::IndicatorKernel, x::AbstractVector{Float64}, y::AbstractVector{Float64})
-    return equals(x, y)
-end
-function kernel(k::IndicatorKernel, dist::Bool)
-    return dist
-end
-
-
-# Gaussian-indicator product kernel for Euclidean x and discrete y
-mutable struct GaussianIndicatorKernel <: AbstractProductKernel
-    f_dist::Function
-    param::Float64
-    function GaussianIndicatorKernel(;f_dist=eucnorm_equals, param=NaN)
-        return new(f_dist, param)
-    end
-end
-function set_param(k::GaussianIndicatorKernel, param::Float64)
-    k.param = param
-end
-function kernel(k::GaussianIndicatorKernel, x::AbstractVector{Float64}, y::AbstractVector{Float64})
-    x_dist, y_dist = eucnorm_equals(x, y)
-    return y_dist ? exp(-x_dist^2/k.param^2) : 0.
-end
-function kernel(k::GaussianIndicatorKernel, dist::Tuple{Float64,Bool})
-    return dist[2] ? exp(-dist[1]/k.param^2) : 0.
-end
-
-
-# Laplace-indicator product kernel for Euclidean x and discrete y
-mutable struct LaplaceIndicatorKernel <: AbstractProductKernel
-    f_dist::Function
-    param::Float64
-    function LaplaceIndicatorKernel(;f_dist=ℓ1norm_equals, param=NaN)
-        return new(f_dist, param)
-    end
-end
-function set_param(k::LaplaceIndicatorKernel, param::Float64)
-    k.param = param
-end
-function kernel(k::LaplaceIndicatorKernel, x::AbstractVector{Float64}, y::AbstractVector{Float64})
-    x_dist, y_dist = ℓ1norm_equals(x, y)
-    return y_dist ? exp(-x_dist/k.param) : 0.
-end
-function kernel(k::LaplaceIndicatorKernel, dist::Tuple{Float64,Bool})
-    return dist[2] ? exp(-dist[1]/k.param) : 0.
-end
-
-
-# Information diffusion kernel for probability vectors
+# Information diffusion kernel (for simplex data)
 # https://proceedings.neurips.cc/paper_files/paper/2002/file/5938b4d054136e5d59ada6ec9c295d7a-Paper.pdf
 mutable struct InformationDiffusionKernel <: AbstractKernel
     f_dist::Function

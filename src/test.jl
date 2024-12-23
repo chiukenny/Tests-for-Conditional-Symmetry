@@ -1,5 +1,4 @@
-## Data structures and functions for tests
-
+## Implementations of data and test objects for convenience
 
 using TriangularIndices
 using LinearAlgebra
@@ -33,7 +32,7 @@ mutable struct Data
     end
 end
 
-# Functions for lazy pre-computation of the statistics
+# Lazily pre-computes useful statistics (only called when needed)
 function initialize(data::Data, G::Group, stat::Symbol)
     if stat==:M || stat==:probs
         initialize_M(data, G)
@@ -101,7 +100,7 @@ function initialize_y_norm(data::Data)
     end
 end
 
-# Clean the data object
+# Cleans the data object
 function clean_data(data::Data)
     data.ρx = Matrix{Float64}(undef, 0, 0)
     data.g = []
@@ -113,18 +112,18 @@ function clean_data(data::Data)
 end
 
 
-# Test functions
-# --------------
+# Generic test and functions
+# --------------------------
 
 abstract type AbstractTest end
 abstract type AbstractAggregateTest <: AbstractTest end
 
 # Object for standardizing outputs of tests
 mutable struct TestSummary
-    name::String             # Test name
-    test_stat::Float64       # Test statistic value
-    reject::Bool             # Result of test (1 reject, 0 not reject)
-    pvalue::Float64          # p-value of test
+    name::String        # Test name
+    test_stat::Float64  # Test statistic value
+    reject::Bool        # Result of test (1 reject, 0 not reject)
+    pvalue::Float64     # p-value of test
     function TestSummary(name, test_stat, reject; pvalue=NaN)
         return new(name, test_stat, reject, pvalue)
     end
@@ -132,9 +131,6 @@ end
 
 # Retrieves the innermost test for nested tests
 function get_test(test::AbstractTest) return test end
-
-# Determines which data to test on
-function get_test_on(test::AbstractTest) return test.test_on end
 
 # Retrieves the resampler
 function get_resampler(test::AbstractTest) return test.RS end
@@ -154,7 +150,7 @@ function run_test(test::AbstractTest, data::Data, α::Float64, same_ref::Bool=fa
         error("Test statistic = NaN")
     end
     
-    # Estimate the p-value and return results
+    # Estimate the p-value and output test results
     p = estimate_pvalue(test, test_stat, same_ref)
     return TestSummary(test.name, test_stat, p<=α, pvalue=p)
 end 

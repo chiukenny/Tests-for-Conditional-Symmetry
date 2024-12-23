@@ -1,6 +1,5 @@
 ## Default and constant variables for convenience
 
-
 const seed = 1  # Base seed for reproducibility
 
 
@@ -10,6 +9,7 @@ B = 100   # Number of resamples
 n = 100   # Sample size
 
 const α = 0.05  # Test size
+
 
 # Experiment arguments
 const GV_GAUSS_COV_n = 25:25:500
@@ -43,7 +43,6 @@ const GV_MMD = "MMD"
 const GV_CR = "CR"
 const GV_FUSE = "FUSE"
 const GV_SK = "SK"
-
 const GV_BS_FS = "BS-FS"
 const GV_BS_SK = "BS-SK"
 const GV_RN_FS = "RN-FS"

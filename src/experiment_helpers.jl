@@ -1,6 +1,5 @@
 ## Helper functions for running experiments
 
-
 using Distributions
 using LinearAlgebra
 using Random
@@ -9,8 +8,7 @@ using Base.Threads
 include("test.jl")
 
 
-# Runs invariance/equivariance tests and saves p-values
-# Rejection rates and other outputs are logged in console
+# Runs invariance/equivariance tests and saves p-values in CSV files
 function run_tests(output_file::IOStream, exp_name::String, tests::AbstractVector{<:AbstractTest};
                    N::Integer=N, n::Integer=n, α::Float64=α, dx::Integer=0, dy::Integer=0, dz::Integer=0, same_ref::Bool=false,
                    f_sample_data::Function=f_nothing, seed::Integer=randInt())
@@ -50,13 +48,12 @@ function run_tests(output_file::IOStream, exp_name::String, tests::AbstractVecto
     Random.seed!(seed)
     base_seed = randInt()
     for i in 1:N
-        # Ensure the simulated data are consistent irrespective of threads at the minimum
+        # Simulate data
         Random.seed!(base_seed + i)
-        
-        # Run test and save results to data frame
         clean_data(data)
         f_sample_data(data)
         
+        # Run test and save results to data frame
         for j in 1:n_tests
             test = tests[j]
             summary = @timed run_test(test, data, α, same_ref)
@@ -78,6 +75,5 @@ function run_tests(output_file::IOStream, exp_name::String, tests::AbstractVecto
         select!(results, Not([r_dict[test.name],t_dict[test.name]]))
     end
     write(output_file, "\n")
-    
     return results
 end

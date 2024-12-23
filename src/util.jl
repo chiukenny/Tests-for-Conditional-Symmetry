@@ -1,5 +1,4 @@
-## Collection of miscellaneous objects and functions shared across tests and experiments
-
+## Implementations of miscellaneous functions
 
 using Random
 using Distributions
@@ -8,10 +7,6 @@ using TriangularIndices
 using InvertedIndices
 using StaticArrays
 using Base.Threads
-
-
-# General functions
-# -----------------
 
 
 # Generates a random integer
@@ -52,13 +47,13 @@ end
 function ℓ1norm_equals(x1::AbstractVector{Float64}, x2::AbstractVector{Float64})
     return @views ℓ1norm(x1[1:end-1],x2[1:end-1]), x1[end]==x2[end]
 end
-# Geodesic distance for probability vectors on simplex
+# Geodesic distance for vectors on simplex
 function geodesic(x::AbstractVector{Float64}, y::AbstractVector{Float64})
     return 2 * acos( min(sum(sqrt,x.*y),1) )
 end
 
 
-# Creates a d-dimensional unit vector
+# Creates a d-dimensional unit vector with 1 in first entry
 function unit_vector(d::Integer)
     e = zeros(d)
     e[1] = 1

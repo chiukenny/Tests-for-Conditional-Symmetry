@@ -1,5 +1,4 @@
-## Implementation of our conditional randomization test for equivariance
-
+## Implementation of the conditional randomization test for equivariance
 
 using Distributions
 using LinearAlgebra
@@ -40,9 +39,9 @@ function initialize(test::CR, data::Data)
 end
 
 
-# Computes the MMD test statistic for equivariance
+# Computes the MMD test statistic
 function test_statistic(test::CR, data::Data)
-    # Generate reference data
+    # Generate comparison data
     RS = get_resampler(test)
     RS_data = resample(RS)
     
@@ -71,9 +70,9 @@ function null_test_statistic(test::CR, data::Data)
 end
 
 
-# Computes the MMD test statistic for equivariance for a set of kernels and bandwidths
+# Computes the MMD test statistic for a set of kernels and bandwidths
 function test_statistic(test::CR, data::Data, kernels::Vector{Tuple{AbstractKernel,Vector{<:Any}}})
-    # Generate reference data
+    # Generate comparison data
     RS = get_resampler(test)
     RS_data = resample(RS)
     
@@ -84,7 +83,7 @@ function test_statistic(test::CR, data::Data, kernels::Vector{Tuple{AbstractKern
     RS_dists = Matrix{Any}(undef, n, n)
     cross_dists = Matrix{Any}(undef, n, n)
     for (j,(k,ks)) in collect(enumerate(kernels))
-        # Compute MMDs for a set of bandwidths for one type of kernel
+        # Compute MMDs for a set of bandwidths for each type of kernel
         ind = (j-1) * n_k
         compute_distances!(dists, k, data.y)
         compute_distances!(RS_dists, k, RS_data.y)
@@ -102,7 +101,7 @@ function null_test_statistic(test::CR, data::Data, kernels::Vector{Tuple{Abstrac
     dists = Matrix{Any}(undef, n, n)
     cross_dists = Matrix{Any}(undef, n, n)
     for (j,(k,ks)) in collect(enumerate(kernels))
-        # Compute MMDs for a set of bandwidths for one type of kernel
+        # Compute MMDs for a set of bandwidths for each type of kernel
         ind = (j-1) * n_k
         compute_distances!(dists, k, data.y)
         compute_distances!(cross_dists, k, data.y, test.RS_data.y)
