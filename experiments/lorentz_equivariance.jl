@@ -1,15 +1,15 @@
-## LHC experiment: tests for equivariance
-## --------------------------------------
+## Lorentz experiment
+## ------------------
 
 Random.seed!(seed)
 
-# Set experimental parameters
+# Experiment parameters
 n = 100
-d = 2
+d = 4
 
 # Create group object
-G = Group(f_transform=rotate_2D, f_inv_transform=inv_rotate_2D, f_transform_Y=rotate_2D, f_inv_transform_Y=inv_rotate_2D,
-          f_max_inv=max_inv_rotate, f_rep_inv=rep_inv_rotate_2D)
+G = Group(f_transform=lorentz_transform, f_transform_Y=lorentz_transform, f_inv_transform_Y=lorentz_inv_transform,
+          f_max_inv=max_inv_lorentz, f_rep_inv=rep_inv_lorentz)
 
 # Create resampler object
 RS = EquivariantResampler(B, G)
@@ -23,24 +23,25 @@ tests = [
 ]
 
 # Read in data
-fid = h5open(dir_out_dat*"LHC.h5", "r")
-LHC = copy(read(fid["data"]))
-n_LHC = size(LHC, 2)
+fid = h5open(dir_out_dat*"TQT.h5", "r")
+TQT = read(fid["data"])
+n_TQT = size(TQT, 2)
 close(fid)
 
 # Initialize data sampling function
-function sample_data(data::Data, H1::Bool=false, lhc::AbstractMatrix{Float64}=LHC, n_lhc::Integer=n_LHC)
-    xy = lhc[:, sample(1:n_lhc,data.n,replace=false)]
-    copy!(data.x, @views xy[1:2,:])
-    copy!(data.y, @views xy[3:4,:])
+function sample_data(data::Data, H1::Bool=false, tqt::AbstractMatrix{Float64}=TQT, n_tqt::Integer=n_TQT)
+    inds = sample(1:n_tqt, data.n, replace=false)
+    copy!(data.x, @views tqt[1:4,inds])
     if H1
-        data.y = data.y[:,randperm(data.n)]
+        data.y = tqt[5:8, inds[randperm(data.n)]]
+    else
+        copy!(data.y, @views tqt[5:8,inds])
     end
 end
 sample_data_H1 = data -> sample_data(data,true)
 
 # Run experiment
-output_name = dir_out * "LHC_equiv_rot_N$(N)_n$(n)_B$(B)"
+output_name = dir_out * "TQT_N$(N)_n$(n)_B$(B)"
 output_file = open(output_name*".txt", "w")
 results = []
 push!(results, run_tests(output_file, "indep_H0", tests, dx=d, dy=d, f_sample_data=sample_data, seed=seed))

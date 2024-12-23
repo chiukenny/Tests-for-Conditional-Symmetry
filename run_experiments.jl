@@ -2,13 +2,9 @@
 ## -----
 ##
 ## From the command line, execute the following command to run ./experiments/<script>.jl:
-##     julia --threads 1 run_experiments.jl <script>.jl
+##     julia --threads 1 run_experiments.jl <script>.jl [args...]
 ##
-## For the experiment ./experiments/equivariance_SO_gaussian_loc_seq.jl, run with two arguments p and s
-##     julia --threads 1 run_experiments.jl equivariance_SO_gaussian_loc_seq.jl [p] [s]
-##
-## For the experiment ./experiments/equivariance_SO_gaussian_cov_B_seq.jl, run with two arguments n and p
-##     julia --threads 1 run_experiments.jl equivariance_SO_gaussian_cov_B_seq.jl [n] [p]
+## See the experiments below for argument inputs
 ##
 ## Edit the 'Experiment settings' and 'Paths' variables below as necessary
 
@@ -70,13 +66,19 @@ if use_raw_data
 end
 
 
-# Run experiment(s)
+# Read arguments
 ARG_script = ARGS[1]
+
+# Synthetic experiment: changing covariance + isolated non-equivariance
+#      Args: [sample size n] [covariance p] [dimension d]
 if ARG_script=="gaussian_equivariance_covariance.jl" || ARG_script=="gaussian_nonequivariance_covariance.jl"
     ARG_n = parse(Int, ARGS[2])
     ARG_p = parse(Float64, ARGS[3])
     ARG_d = parse(Int, ARGS[4])
     println("[$(Dates.format(now(),GV_DT))] Running $(ARG_script) with n=$(ARG_n), p=$(ARG_p), and d=$(ARG_d)")
+    
+# Synthetic experiment: approximate versus exact conditional sampling
+#      Args: [sample size n] [covariance p] [dimension d]
 elseif ARG_script == "gaussian_equivariance_truth.jl"
     ARG_n = parse(Int, ARGS[2])
     ARG_p = parse(Float64, ARGS[3])
@@ -87,31 +89,51 @@ elseif ARG_script == "gaussian_equivariance_truth.jl"
     else
         println("[$(Dates.format(now(),GV_DT))] Running $(ARG_script) with n=$(ARG_n), p=$(ARG_p), and d=$(ARG_d)")
     end
+    
+# Synthetic experiment: permutation
+#      Args: [sample size n] [shift s] [dimension d]
 elseif ARG_script == "gaussian_equivariance_permutation.jl"
     ARG_n = parse(Int, ARGS[2])
     ARG_s = parse(Float64, ARGS[3])
     ARG_d = parse(Int, ARGS[4])
     println("[$(Dates.format(now(),GV_DT))] Running $(ARG_script) with n=$(ARG_n), s=$(ARG_s), and d=$(ARG_d)")
+    
+# Synthetic experiment: number of randomizations
+#      Args: [sample size n] [covariance p] [randomizations B]
 elseif ARG_script == "gaussian_equivariance_resamples.jl"
     ARG_n = parse(Int, ARGS[2])
     ARG_p = parse(Float64, ARGS[3])
     ARG_B = parse(Int, ARGS[4])
     println("[$(Dates.format(now(),GV_DT))] Running $(ARG_script) with n=$(ARG_n) and p=$(ARG_p)")
+    
+# Synthetic experiment: non-equivariance in mean
+#      Args: [proportion p] [shift s] [sample size n]
 elseif ARG_script == "gaussian_equivariance_sensitivity.jl"
     ARG_p = parse(Float64, ARGS[2])
     ARG_s = parse(Float64, ARGS[3])
     ARG_n = parse(Int, ARGS[4])
     println("[$(Dates.format(now(),GV_DT))] Running $(ARG_script) with p=$(ARG_p), s=$(ARG_s), and n=$(ARG_n)")
+    
+# MNIST experiment
+#      Args: [data augmentation? {true,false}] [include digit 9? {true,false}]
 elseif ARG_script == "MNIST_conditional_invariance.jl"
     ARG_aug = parse(Bool, ARGS[2])
     ARG_9 = parse(Bool, ARGS[3])
     println("[$(Dates.format(now(),GV_DT))] Running $(ARG_script) with aug=$(ARG_aug) and keep_9=$(ARG_9)")
+    
+# Invariance experiment
+#      Args: [sample size n] [proportion p]
 elseif ARG_script == "invariance.jl"
     ARG_n = parse(Int, ARGS[2])
     ARG_p = parse(Float64, ARGS[3])
     println("[$(Dates.format(now(),GV_DT))] Running $(ARG_script) with n=$(ARG_n) and p=$(ARG_p)")
+    
+# Other experiments with no arguments (LHC, Lorentz)
 else
     println("[$(Dates.format(now(),GV_DT))] Running $(ARG_script)")
 end
+
+
+# Run experiment
 t = @elapsed include(dir_exp * ARG_script)
 println("[$(Dates.format(now(),GV_DT))] Experiment $(ARG_script) completed in $(ceil(Int,t)) seconds\n")

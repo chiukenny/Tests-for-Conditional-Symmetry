@@ -5,7 +5,6 @@ using Distributions
 using LinearAlgebra
 using Random
 using DataFrames
-using Plots
 using Base.Threads
 include("test.jl")
 
@@ -13,8 +12,8 @@ include("test.jl")
 # Runs invariance/equivariance tests and saves p-values
 # Rejection rates and other outputs are logged in console
 function run_tests(output_file::IOStream, exp_name::String, tests::AbstractVector{<:AbstractTest};
-                   N::Integer=N, n::Integer=n, α::Float64=α, dx::Integer=0, dy::Integer=0, dz::Integer=0,
-                   f_sample_data::Function=f_nothing, seed::Integer=randInt(), same_ref::Bool=false)
+                   N::Integer=N, n::Integer=n, α::Float64=α, dx::Integer=0, dy::Integer=0, dz::Integer=0, same_ref::Bool=false,
+                   f_sample_data::Function=f_nothing, seed::Integer=randInt())
     # Prepare output data frame
     n_tests = length(tests)
     results = DataFrame()

@@ -2,7 +2,7 @@
 ## -----
 ##
 ## From the command line, execute the following command to
-## make the plots in the paper after running all experiments:
+## make the plots and figures in the paper after running all experiments:
 ##     julia make_plots.jl
 ##
 ## Edit the 'Paths' variables below as necessary
@@ -22,7 +22,6 @@ println("Loading packages and modules")
 
 using Random
 using Distributions
-using HypothesisTests
 using DataFrames
 using CSV
 using Plots
@@ -81,6 +80,11 @@ all_tests_i = [iGV_BS_FS, iGV_BS_SK, iGV_RN_FS, iGV_RN_SK]
 all_tests_r = [rGV_BS_FS, rGV_BS_SK, rGV_RN_FS, rGV_RN_SK]
 test_labs = [GV_BS_FS, GV_BS_SK, GV_RN_FS, GV_RN_SK]
 
+# Default legend
+n_labs = 4
+leg = plot(zeros(1,n_labs), showaxis=false, legend=true, label=reshape(test_labs,1,n_labs), legendcolumns=Int(n_labs/2),
+           foreground_color_legend=nothing, color=reshape([colsDict[test] for test in all_tests_r],1,n_labs))
+
 
 # Plotting functions
 # ------------------
@@ -114,28 +118,9 @@ function plot_rej_rate(means::AbstractMatrix{Float64}, sds::AbstractMatrix{Float
     end
     return p
 end
-function plot_rej_rate_all(means::AbstractMatrix{Float64}, sds::AbstractMatrix{Float64},
-                       tests::AbstractVector{String}, x::AbstractVector{<:Number};
-                       title="", xlab="", ylab="", ylims=(0,1), pl_xticks=false, pl_yticks=false, all_tests=all_tests)
-    p = plot(xlab=xlab, ylab=ylab, xlims=(minimum(x),maximum(x)), ylims=ylims, grid=true, title=title)
-    @views @inbounds for test in tests
-        i = findall(x->x==test, all_tests)[1]
-        alpha = startswith(test,"reuse_") ? 0.4 : 0.7
-        style = startswith(test,"reuse_") ? :dot : :solid
-        plot!(x, means[i,:], linecolor=colsDict[test], linealpha=alpha, linestyle=style, label=test)
-    end
-    if !pl_xticks
-        plot!(xticks = (xticks(p)[1][1],""))
-    end
-    if !pl_yticks
-        plot!(yticks = (yticks(p)[1][1],""))
-    end
-    return p
-end
 
 # Plots p-value distribution
-function hist(df::DataFrame, test::String, ylab="";
-              bins=10, bw=0.1, p_col=:white, p_y=0, p_x=0.77, x_ticks=[0,0.5,1], title="", last_row=false, KS=false)
+function hist(df::DataFrame, test::String, ylab=""; bins=10, bw=0.1, x_ticks=[0,0.5,1], title="", last_row=false)
     x = df[:, Regex(test*"_p\$")][!,1]
     xx = vcat(x, collect(minimum(x_ticks):maximum(x_ticks))./bins)  # Visual hack to force all bins to show
     xt = last_row ? [x_ticks[i]==0 ? "0" : rstrip(string(x_ticks[i]),['0','.']) for i in 1:length(x_ticks)] : []
@@ -143,34 +128,20 @@ function hist(df::DataFrame, test::String, ylab="";
                   xticks=(x_ticks,xt), xlims=[minimum(x_ticks),maximum(x_ticks)], ylab=ylab, yticks=[], title=title)
     yl = ylims(p)
     ylims!(0, yl[2])
-    if KS
-        # Perform Kolmogorov-Smirnov test and show p-value
-        P_U = Uniform(0, 1)
-        n = length(x)
-        pv = pvalue(ExactOneSampleKSTest(jitter(x), P_U))
-        scatter!([p_x], [p_y], alpha=0,
-                 series_annotation=text(L"$\mathbf{%$(rpad(round(pv,digits=3),5,'0'))}$",:bottom,pointsize=9,color=p_col))
-    end
     return p
 end
 
-
-# Miscellaneous
-# -------------
-
+# Creates a circle
 function circle(h, k, r)
     θ = LinRange(0, 2*π, 200)
     h .+ r*sin.(θ), k .+ r*cos.(θ)
 end
 
-n_labs = 4
-leg = plot(zeros(1,n_labs), showaxis=false, legend=true, label=reshape(test_labs,1,n_labs), legendcolumns=Int(n_labs/2),
-           foreground_color_legend=nothing, color=reshape([colsDict[test] for test in all_tests_r],1,n_labs))
 
 ## Plots
 
-# Symmetries
-# ----------
+# Symmetry figure
+# ---------------
 
 Random.seed!(1)
 
@@ -178,7 +149,7 @@ G = Group(f_sample=rand_θ, f_transform=rotate_2D)
 n = 250
 Pz = Normal(1, 0.2)
 
-# Invariant vs non-invariant
+# Invariance vs non-invariance
 x = zeros(2, n)
 x[1,:] = rand(Pz, n)
 x = transform_all(G, x)
@@ -202,7 +173,7 @@ hline!([0], color=:black, linealpha=0.1, linewidth=1)
 vline!([0], color=:black, linealpha=0.1, linewidth=1)
 scatter!(x[1,:], x[2,:], markercolor=:hotpink, title="Marginally non-invariant", markersize=3, markerstrokewidth=0, markeralpha=0.35)
 
-# Equivariant vs non-equivariant
+# Equivariance vs non-equivariance
 n = 100
 x = [0 0 -1; 1. -1. 0]
 p_x = copy(x)
@@ -211,7 +182,7 @@ col1 = :darkorchid
 col2 = :orange
 col3 = :green3
 
-# Equivariant
+# Equivariance
 Random.seed!(1)
 Σ = [0.2 0; 0 0.04]
 P = MvNormal(zeros(2), Σ)
@@ -231,7 +202,7 @@ scatter!(y2[1,:], y2[2,:], markeralpha=0.35, color=col2, markerstrokewidth=0, ma
 scatter!(y3[1,:], y3[2,:], markeralpha=0.35, color=col3, markerstrokewidth=0, markersize=3, markershape=:utriangle)
 scatter!(p_x[1,:], p_x[2,:], markeralpha=0.5, color=[col1,col2,col3], markersize=5)
 
-# Not equivariant
+# Not equivariance
 Random.seed!(1)
 # Y | X1
 Σ1 = [0.2 0; 0 0.04]
@@ -255,7 +226,7 @@ scatter!(y2[1,:], y2[2,:], markeralpha=0.35, color=col2, markerstrokewidth=0, ma
 scatter!(y3[1,:], y3[2,:], markeralpha=0.35, color=col3, markerstrokewidth=0, markersize=3, markershape=:utriangle)
 scatter!(p_x[1,:], p_x[2,:], markeralpha=0.5, color=[col1,col2,col3], markersize=5)
 
-# Conditionally invariant vs non-conditionally invariant
+# Conditional invariance vs non-conditional invariance
 Random.seed!(1)
 Σ = [0.04 0; 0 0.2]
 P = MvNormal(zeros(2), Σ)
@@ -299,8 +270,8 @@ savefig(fig1, fig1_name)
 println("Created $(fig1_name)")
 
 
-# Equivariance
-# ------------
+# Equivariance figure
+# -------------------
 
 n = 100
 x = [0 0 -1.; 1. -1. 0]
@@ -350,7 +321,7 @@ scatter!(τy1[1,:], τy1[2,:], markeralpha=0.35, color=col1, markerstrokewidth=0
 scatter!(τy2[1,:], τy2[2,:], markeralpha=0.35, color=col2, markerstrokewidth=0, markersize=3, markershape=:utriangle)
 scatter!(ρx[1,:], ρx[2,:], markeralpha=0.5, color=[col1,col2,col3], markersize=5)
 
-# Not equivariant
+# Non-equivariance
 Random.seed!(1)
 # Y | X1
 Σ1 = [0.2 0; 0 0.04]
@@ -395,10 +366,10 @@ savefig(fig2, fig2_name)
 println("Created $(fig2_name)")
 
 
-# Gaussian equivariance covariance experiments
-# --------------------------------------------
+# Synthetic experiment: changing covariance
+# -----------------------------------------
 
-println("Creating equivariance covariance plots")
+println("Creating changing covariance experiment plots")
 
 # Set up experiment parameters
 ps = GV_GAUSS_COV_p
@@ -465,44 +436,11 @@ fig_name = dir_plt * "gauss_equiv_cov_all.pdf"
 savefig(fig, fig_name)
 println("Created $(fig_name)")
 
-# p-values
-n_tests = length(test_labs)
-figsi = Matrix{Any}(undef, n_p, n_tests)
-figsr = Matrix{Any}(undef, n_p, n_tests)
-@views @inbounds @threads for i in 1:n_p
-    pvals = CSV.read(dir_out*"gauss_cov_SO$(ds[1])_N1000_B100_n250_p$(ps[i]).csv", DataFrame)
-    for j in 1:n_tests
-        last_row = j==n_tests
-        title = j==1 ? L"p=%$(min(ps[i],0.99))" : ""
-        ylab = i==1 ? test_labs[j] : ""
-        figsi[i,j] = hist(pvals, all_tests_i[j], ylab, title=title, last_row=last_row)
-        figsr[i,j] = hist(pvals, all_tests_r[j], ylab, title=title, last_row=last_row)
-    end
-end
 
-p_title = shared_xlab("Independent comparison sets", bottom_margin=-3mm)
-p_xlab = shared_xlab(L"$p$-value", top_margin=-1mm)
-p_ylab = shared_ylab("Frequency", right_margin=6mm)
-l = @layout [c{0.0001w} [c{0.03h} ; grid(n_tests,n_p) ; b{0.03h}]]
-figi = plot(p_ylab, p_title, figsi..., p_xlab, layout=l, size=(450,300))
-figi_name = dir_plt * "pval_gauss_equiv_cov_indep.pdf"
-savefig(figi, figi_name)
+# Synthetic experiment: isolated non-equivariance
+# -----------------------------------------------
 
-p_title = shared_xlab("Reused comparison set", bottom_margin=-3mm)
-p_xlab = shared_xlab(L"$p$-value", top_margin=-1mm)
-p_ylab = shared_ylab("Frequency", right_margin=6mm)
-l = @layout [c{0.0001w} [c{0.03h} ; grid(n_tests,n_p) ; b{0.03h}]]
-figr = plot(p_ylab, p_title, figsr..., p_xlab, layout=l, size=(450,300))
-figr_name = dir_plt * "pval_gauss_equiv_cov_reuse.pdf"
-savefig(figr, figr_name)
-
-println("Created $(figi_name) and $(figr_name)")
-
-
-# Gaussian non-equivariance covariance experiments
-# ------------------------------------------------
-
-println("Creating non-equivariance covariance plots")
+println("Creating isolated non-equivariance experiment plots")
 
 # Set up experiment parameters
 ps = GV_GAUSS_COV_p[2:end]
@@ -569,44 +507,11 @@ fig_name = dir_plt * "gauss_nonequiv_cov_all.pdf"
 savefig(fig, fig_name)
 println("Created $(fig_name)")
 
-# p-values
-n_tests = length(test_labs)
-figsi = Matrix{Any}(undef, n_p, n_tests)
-figsr = Matrix{Any}(undef, n_p, n_tests)
-@views @inbounds @threads for i in 1:n_p
-    pvals = CSV.read(dir_out*"gauss_nonequiv_cov_SO$(ds[1])_N1000_B100_n250_p$(ps[i]).csv", DataFrame)
-    for j in 1:n_tests
-        last_row = j==n_tests
-        title = j==1 ? L"p=%$(min(ps[i],0.99))" : ""
-        ylab = i==1 ? test_labs[j] : ""
-        figsi[i,j] = hist(pvals, all_tests_i[j], ylab, title=title, last_row=last_row)
-        figsr[i,j] = hist(pvals, all_tests_r[j], ylab, title=title, last_row=last_row)
-    end
-end
 
-p_title = shared_xlab("Independent comparison sets", bottom_margin=-3mm)
-p_xlab = shared_xlab(L"$p$-value", top_margin=-1mm)
-p_ylab = shared_ylab("Frequency", right_margin=5mm)
-l = @layout [c{0.0001w} [c{0.03h} ; grid(n_tests,n_p) ; b{0.03h}]]
-figi = plot(p_ylab, p_title, figsi..., p_xlab, layout=l, size=(375,300))
-figi_name = dir_plt * "pval_gauss_nonequiv_cov_indep.pdf"
-savefig(figi, figi_name)
+# Synthetic experiment: approximate versus exact conditional sampling
+# -------------------------------------------------------------------
 
-p_title = shared_xlab("Reused comparison set", bottom_margin=-3mm)
-p_xlab = shared_xlab(L"$p$-value", top_margin=-1mm)
-p_ylab = shared_ylab("Frequency", right_margin=5mm)
-l = @layout [c{0.0001w} [c{0.03h} ; grid(n_tests,n_p) ; b{0.03h}]]
-figr = plot(p_ylab, p_title, figsr..., p_xlab, layout=l, size=(375,300))
-figr_name = dir_plt * "pval_gauss_nonequiv_cov_reuse.pdf"
-savefig(figr, figr_name)
-
-println("Created $(figi_name) and $(figr_name)")
-
-
-# Gaussian equivariance truth experiments
-# --------------------------------------------
-
-println("Creating equivariance truth plots")
+println("Creating approximate vs exact conditional sampling experiment plots")
 
 # Set up experiment parameters
 ps = GV_GAUSS_TRUTH_p
@@ -688,7 +593,7 @@ figi_name = dir_plt * "gauss_equiv_truth_indep.pdf"
 savefig(figi, figi_name)
 println("Created $(figi_name)")
 
-# p-values
+# p-value plots
 n_tests = length(test_labs)
 figsi = Matrix{Any}(undef, n_p, n_tests)
 figsr = Matrix{Any}(undef, n_p, n_tests)
@@ -749,10 +654,10 @@ println("Created $(figi_name) and $(figr_name)")
 println("Created $(figi_t_name) and $(figr_t_name)")
 
 
-# Gaussian equivariance permutation experiments
-# ---------------------------------------------
+# Synthetic experiment: permutation
+# ---------------------------------
 
-println("Creating equivariance permutation plots")
+println("Creating permutation experiment plots")
 
 # Set up experiment parameters
 ns = GV_GAUSS_PER_n
@@ -819,44 +724,11 @@ fig_name = dir_plt * "gauss_equiv_perm_indep.pdf"
 savefig(fig, fig_name)
 println("Created $(fig_name)")
 
-# p-values
-n_tests = length(test_labs)
-figsi = Matrix{Any}(undef, n_s, n_tests)
-figsr = Matrix{Any}(undef, n_s, n_tests)
-@views @inbounds @threads for i in 1:n_s
-    pvals = CSV.read(dir_out*"gauss_perm_S3_N1000_B100_n250_s$(ss[i]).csv", DataFrame)
-    for j in 1:n_tests
-        last_row = j==n_tests
-        title = j==1 ? L"s=%$(ss[i])" : ""
-        ylab = i==1 ? test_labs[j] : ""
-        figsi[i,j] = hist(pvals, all_tests_i[j], ylab, title=title, last_row=last_row)
-        figsr[i,j] = hist(pvals, all_tests_r[j], ylab, title=title, last_row=last_row)
-    end
-end
 
-p_title = shared_xlab("Independent comparison sets", bottom_margin=-3mm)
-p_xlab = shared_xlab(L"$p$-value", top_margin=-1mm)
-p_ylab = shared_ylab("Frequency", right_margin=6mm)
-l = @layout [c{0.0001w} [c{0.03h} ; grid(n_tests,n_s) ; b{0.03h}]]
-figi = plot(p_ylab, p_title, figsi..., p_xlab, layout=l, size=(450,300))
-figi_name = dir_plt * "pval_gauss_equiv_perm_indep.pdf"
-savefig(figi, figi_name)
-ep = shared_xlab("")
+# Synthetic experiment: number of randomizations
+# ----------------------------------------------
 
-p_title = shared_xlab("Reused comparison set", bottom_margin=-3mm)
-p_xlab = shared_xlab(L"$p$-value", top_margin=-1mm)
-p_ylab = shared_ylab("Frequency", right_margin=6mm)
-l = @layout [c{0.0001w} [c{0.03h} ; grid(n_tests,n_s) ; b{0.03h}]]
-figr = plot(p_ylab, p_title, figsr..., p_xlab, layout=l, size=(450,300))
-figr_name = dir_plt * "pval_gauss_equiv_perm_reuse.pdf"
-savefig(figr, figr_name)
-# println("Created $(figi_name) and $(figr_name)")
-
-
-# Gaussian equivariance resamples experiments
-# -------------------------------------------
-
-println("Creating equivariance resamples plots")
+println("Creating number of randomizations experiment plots")
 
 # Set up experiment parameters
 ps = GV_GAUSS_RES_p
@@ -926,10 +798,10 @@ savefig(figr, figr_name)
 println("Created $(figi_name) and $(figr_name)")
 
 
-# Gaussian equivariance sensitivity experiments
-# ---------------------------------------------
+# Synthetic experiment: non-equivariance in mean
+# ----------------------------------------------
 
-println("Creating equivariance sensitivity plots")
+println("Creating non-equivariance in mean experiment plots")
 
 # Set up experiment parameters
 ps = GV_GAUSS_SEN_p
@@ -986,39 +858,6 @@ figr = plot(p_ylab, leg,
                    figsr...,
                    p_xlab, layout=l, size=(600,425))
 figr_name = dir_plt * "gauss_equiv_sensitivity_reuse.pdf"
-savefig(figr, figr_name)
-println("Created $(figi_name) and $(figr_name)")
-
-# p-values
-n_s = length(ss)
-n_tests = length(test_labs)
-figsi = Matrix{Any}(undef, n_s, n_tests)
-figsr = Matrix{Any}(undef, n_s, n_tests)
-@views @inbounds @threads for i in 1:n_s
-    pvals = CSV.read(dir_out*"gauss_sens_SO3_N1000_B100_p3.142_s$(ss[i])_n250.csv", DataFrame)
-    for j in 1:n_tests
-        last_row = j==n_tests
-        title = j==1 ? L"s=%$(ss[i])" : ""
-        ylab = i==1 ? test_labs[j] : ""
-        figsi[i,j] = hist(pvals, all_tests_i[j], ylab, title=title, last_row=last_row)
-        figsr[i,j] = hist(pvals, all_tests_r[j], ylab, title=title, last_row=last_row)
-    end
-end
-
-p_title = shared_xlab("Independent comparison sets", bottom_margin=-3mm)
-p_xlab = shared_xlab(L"$p$-value", top_margin=-1mm)
-p_ylab = shared_ylab("Frequency", right_margin=6mm)
-l = @layout [c{0.0001w} [c{0.03h} ; grid(n_tests,n_s) ; b{0.03h}]]
-figi = plot(p_ylab, p_title, figsi..., p_xlab, layout=l, size=(450,300))
-figi_name = dir_plt * "pval_gauss_equiv_sensitivity_indep.pdf"
-savefig(figi, figi_name)
-
-p_title = shared_xlab("Reused comparison set", bottom_margin=-3mm)
-p_xlab = shared_xlab(L"$p$-value", top_margin=-1mm)
-p_ylab = shared_ylab("Frequency", right_margin=6mm)
-l = @layout [c{0.0001w} [c{0.03h} ; grid(n_tests,n_s) ; b{0.03h}]]
-figr = plot(p_ylab, p_title, figsr..., p_xlab, layout=l, size=(450,300))
-figr_name = dir_plt * "pval_gauss_equiv_sensitivity_reuse.pdf"
 savefig(figr, figr_name)
 println("Created $(figi_name) and $(figr_name)")
 
@@ -1125,7 +964,7 @@ fig_name = dir_plt * "invariance.pdf"
 savefig(fig, fig_name)
 println("Created $(fig_name)")
 
-# p-values
+# p-value plots
 n_tests = length(test_labs)
 figs = Matrix{Any}(undef, n_p, n_tests)
 @views @inbounds @threads for i in 1:n_p
@@ -1147,8 +986,8 @@ savefig(fig, fig_name)
 println("Created $(fig_name)")
 
 
-# LHC data
-# --------
+# LHC data figure
+# ---------------
 
 Random.seed!(seed)
 

@@ -15,7 +15,7 @@
 ##         Output: maximal invariant matrix M(X)
 ##     - f_rep_inv
 ##         Inputs: data point x
-##         Output: action g such that g*γ(x)=x
+##         Output: action g such that g*ρ(x)=x
 
 using Base.Threads
 using StaticArrays

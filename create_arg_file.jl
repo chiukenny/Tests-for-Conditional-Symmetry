@@ -1,17 +1,21 @@
 ## USAGE
 ## -----
 ##
-## From the command line, execute the following command:
+## From the command line, execute the following command to create
+## arg files for parallelizing experiments:
 ##     julia create_arg_file.jl
 
+
+# Paths
 dir_src = "./src/"
+
 
 # Load experiment arguments
 include(dir_src * "global_variables.jl")
 
 
-# gaussian_equivariance_covariance_*.jl
-# -------------------------------------
+# Synthetic experiment: changing covariance
+# -----------------------------------------
 
 output_file = open("gaussian_equivariance_covariance_args.txt", "w")
 for n in GV_GAUSS_COV_n
@@ -24,8 +28,8 @@ end
 close(output_file)
 
 
-# gaussian_nonequivariance_covariance_*.jl
-# -------------------------------------
+# Synthetic experiment: isolated non-equivariance
+# -----------------------------------------------
 
 output_file = open("gaussian_nonequivariance_covariance_args.txt", "w")
 for n in GV_GAUSS_COV_n
@@ -38,8 +42,8 @@ end
 close(output_file)
 
 
-# gaussian_equivariance_truth_*.jl
-# -------------------------------------
+# Synthetic experiment: approximate versus exact conditional sampling
+# -------------------------------------------------------------------
 
 output_file = open("gaussian_equivariance_truth_args.txt", "w")
 for n in GV_GAUSS_TRUTH_n
@@ -54,8 +58,8 @@ end
 close(output_file)
 
 
-# gaussian_equivariance_covariance_sensitivity.jl
-# -----------------------------------------------
+# Synthetic experiment: non-equivariance in mean
+# ----------------------------------------------
 
 output_file = open("gaussian_equivariance_sensitivity_args.txt", "w")
 for p in GV_GAUSS_SEN_p
@@ -68,8 +72,8 @@ end
 close(output_file)
 
 
-# gaussian_equivariance_resamples.jl
-# --------------------------------
+# Synthetic experiment: number of randomizations
+# ----------------------------------------------
 
 output_file = open("gaussian_equivariance_resamples_args.txt", "w")
 for n in GV_GAUSS_RES_n
@@ -82,8 +86,8 @@ end
 close(output_file)
 
 
-# gaussian_equivariance_permutation.jl
-# -------------------------------------
+# Synthetic experiment: permutation
+# ---------------------------------
 
 output_file = open("gaussian_equivariance_permutation_args.txt", "w")
 for n in GV_GAUSS_PER_n
@@ -96,8 +100,8 @@ end
 close(output_file)
 
 
-# MNIST_conditional_invariance.jl
-# -------------------------------------
+# MNIST experiment
+# ----------------
 
 output_file = open("MNIST_args.txt", "w")
 for aug in GV_MNIST_aug
@@ -108,8 +112,8 @@ end
 close(output_file)
 
 
-# invariance.jl
-# -------------------------------------
+# Invariance experiment
+# ---------------------
 
 output_file = open("invariance_args.txt", "w")
 for n in GV_INV_n

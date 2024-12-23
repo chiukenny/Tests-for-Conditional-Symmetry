@@ -20,12 +20,6 @@ function randInt()
 end
 
 
-# Standardizes a dataset
-function standardize(x::AbstractMatrix{Float64})
-    return (x .- mean(x,dims=2)) ./ std(x,dims=2)
-end
-
-
 # Computes the median distance between points in a sample
 function med_dist(x::AbstractMatrix{Float64}; max_n::Integer=100)
     n = size(x, 2)

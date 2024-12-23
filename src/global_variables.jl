@@ -7,6 +7,7 @@ const seed = 1  # Base seed for reproducibility
 # Default experimental parameters
 N = 1000  # Number of simulations
 B = 100   # Number of resamples
+n = 100   # Sample size
 
 const α = 0.05  # Test size
 
